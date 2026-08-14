@@ -10,13 +10,31 @@ from sqlalchemy.orm import sessionmaker, DeclarativeBase
 from app.core.config import settings
 
 
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import sessionmaker, DeclarativeBase
+from app.core.config import settings
+
+
+# ── Resolve Database URL with Placeholder Fallback ──────────────────────────
+db_url = settings.DATABASE_URL
+if "your_project_ref" in db_url or not db_url:
+    db_url = "sqlite:///./careerai.db"
+
+
 # ── SQLAlchemy Engine ─────────────────────────────────────────────────────────
-# pool_pre_ping=True — automatically reconnects dropped connections
-engine = create_engine(
-    settings.DATABASE_URL,
-    pool_pre_ping=True,
-    echo=settings.DEBUG,          # log SQL queries only in debug mode
-)
+if db_url.startswith("sqlite"):
+    engine = create_engine(
+        db_url,
+        connect_args={"check_same_thread": False},
+        echo=settings.DEBUG,
+    )
+else:
+    # pool_pre_ping=True — automatically reconnects dropped connections
+    engine = create_engine(
+        db_url,
+        pool_pre_ping=True,
+        echo=settings.DEBUG,          # log SQL queries only in debug mode
+    )
 
 # ── Session Factory ───────────────────────────────────────────────────────────
 # autocommit=False means we manually commit transactions

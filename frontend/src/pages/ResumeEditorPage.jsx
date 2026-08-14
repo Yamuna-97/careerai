@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
+import ResumePreview from '../components/ResumePreview';
 
 export default function ResumeEditorPage() {
   const [activeTab, setActiveTab] = useState('personal');
-  const [selectedTemplate, setSelectedTemplate] = useState('Modern');
+  const [selectedTemplate, setSelectedTemplate] = useState(() => localStorage.getItem('careerai_template_id') || 'Modern');
   const [zoom, setZoom] = useState(85);
 
   const [resumeData, setResumeData] = useState({
@@ -312,126 +314,18 @@ export default function ResumeEditorPage() {
 
             {/* Document Canvas */}
             <div className="flex-1 overflow-y-auto editor-scroll p-8 md:p-12 flex justify-center items-start pt-16">
-              <div
-                className="w-full max-w-[800px] bg-white text-gray-900 shadow-xl rounded-sm p-10 flex flex-col border border-outline-variant mx-auto transition-transform origin-top"
-                style={{ transform: `scale(${zoom / 100})`, minHeight: '1000px' }}
-              >
-                {/* Resume Header */}
-                <header className="border-b-2 border-gray-900 pb-6 mb-6">
-                  <h1 className="text-4xl font-bold tracking-tight text-gray-900 uppercase">
-                    {resumeData.firstName} {resumeData.lastName}
-                  </h1>
-                  <p className="text-xl text-primary font-medium mt-1">{resumeData.title}</p>
-                  <div className="flex flex-wrap gap-4 mt-4 text-sm text-gray-600">
-                    <div className="flex items-center gap-1">
-                      <span className="material-symbols-outlined text-sm">mail</span>
-                      {resumeData.email}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <span className="material-symbols-outlined text-sm">phone</span>
-                      {resumeData.phone}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <span className="material-symbols-outlined text-sm">location_on</span>
-                      {resumeData.location}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <span className="material-symbols-outlined text-sm">link</span>
-                      {resumeData.linkedin}
-                    </div>
-                  </div>
-                </header>
-
-                <div className="flex-1 grid grid-cols-3 gap-8 text-left">
-                  {/* Left Column */}
-                  <div className="col-span-2 space-y-6">
-                    {/* Summary */}
-                    <section>
-                      <h2 className="text-base font-bold text-gray-900 uppercase tracking-wider border-b border-gray-300 pb-1 mb-2">
-                        Professional Summary
-                      </h2>
-                      <p className="text-sm leading-relaxed text-gray-700">{resumeData.summary}</p>
-                    </section>
-
-                    {/* Experience */}
-                    <section>
-                      <h2 className="text-base font-bold text-gray-900 uppercase tracking-wider border-b border-gray-300 pb-1 mb-3">
-                        Experience
-                      </h2>
-                      {resumeData.experiences.map((exp, i) => (
-                        <div key={i} className="mb-4">
-                          <div className="flex justify-between items-baseline mb-1">
-                            <h3 className="font-bold text-gray-900 text-sm">{exp.role}</h3>
-                            <span className="text-xs font-medium text-gray-500">{exp.period}</span>
-                          </div>
-                          <p className="text-xs text-primary font-medium mb-1">
-                            {exp.company} | {exp.location}
-                          </p>
-                          <ul className="list-disc list-inside text-xs text-gray-700 space-y-1 ml-1">
-                            {exp.bullets.map((b, bi) => (
-                              <li key={bi}>{b}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      ))}
-                    </section>
-                  </div>
-
-                  {/* Right Column */}
-                  <div className="col-span-1 space-y-6">
-                    {/* Skills */}
-                    <section>
-                      <h2 className="text-base font-bold text-gray-900 uppercase tracking-wider border-b border-gray-300 pb-1 mb-2">
-                        Skills
-                      </h2>
-                      <div className="space-y-2 text-xs">
-                        <div>
-                          <h4 className="font-bold text-gray-800">Design</h4>
-                          <p className="text-gray-600">{resumeData.skills.design}</p>
-                        </div>
-                        <div>
-                          <h4 className="font-bold text-gray-800">Tools</h4>
-                          <p className="text-gray-600">{resumeData.skills.tools}</p>
-                        </div>
-                        <div>
-                          <h4 className="font-bold text-gray-800">Research</h4>
-                          <p className="text-gray-600">{resumeData.skills.research}</p>
-                        </div>
-                      </div>
-                    </section>
-
-                    {/* Education */}
-                    <section>
-                      <h2 className="text-base font-bold text-gray-900 uppercase tracking-wider border-b border-gray-300 pb-1 mb-2">
-                        Education
-                      </h2>
-                      <div>
-                        <h3 className="font-bold text-gray-900 text-xs">{resumeData.education.degree}</h3>
-                        <p className="text-[11px] text-gray-600 mt-0.5">{resumeData.education.school}</p>
-                        <p className="text-[11px] text-gray-500">{resumeData.education.period}</p>
-                      </div>
-                    </section>
-                  </div>
-                </div>
-              </div>
+              <ResumePreview resumeData={resumeData} templateId={selectedTemplate} scale={zoom} />
             </div>
 
             {/* Template Selector Thumbnail Strip */}
             <div className="h-20 bg-surface border-t border-outline-variant px-6 flex items-center gap-6 shrink-0 z-20">
-              <span className="font-label-sm text-label-sm text-on-surface-variant font-bold">Templates:</span>
-              {['Modern', 'Executive', 'Creative'].map((tpl) => (
-                <button
-                  key={tpl}
-                  onClick={() => setSelectedTemplate(tpl)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-label-md border transition-all cursor-pointer ${
-                    selectedTemplate === tpl
-                      ? 'border-primary bg-primary/10 text-primary font-bold shadow-sm'
-                      : 'border-outline-variant text-on-surface-variant hover:bg-surface-container'
-                  }`}
-                >
-                  {tpl}
-                </button>
-              ))}
+              <span className="font-label-sm text-label-sm text-on-surface-variant font-bold">Active Layout: {selectedTemplate}</span>
+              <Link
+                to="/resume/templates"
+                className="px-4 py-1.5 border border-outline-variant hover:bg-surface-container text-on-surface rounded-lg font-label-md text-xs font-bold transition-all shadow-sm bg-surface cursor-pointer"
+              >
+                Browse 20+ Template Layouts →
+              </Link>
             </div>
           </section>
         </main>

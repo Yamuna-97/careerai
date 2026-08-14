@@ -13,6 +13,7 @@ from app.models.project import Project
 from app.models.skill import Skill
 from app.models.certification import Certification
 from app.models.achievement import Achievement
+from app.models.interview import InterviewSession, InterviewQuestion, InterviewAnswer
 
 __all__ = [
     "User",
@@ -23,4 +24,7 @@ __all__ = [
     "Skill",
     "Certification",
     "Achievement",
+    "InterviewSession",
+    "InterviewQuestion",
+    "InterviewAnswer",
 ]

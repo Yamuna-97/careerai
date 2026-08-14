@@ -21,12 +21,22 @@ from app.api.router import api_router
 async def lifespan(app: FastAPI):
     """Runs startup and shutdown logic."""
     # Startup
-    print(f"🚀 Starting {settings.APP_NAME} v{settings.APP_VERSION}")
+    print(f"[*] Starting {settings.APP_NAME} v{settings.APP_VERSION}")
     print(f"   Debug mode: {settings.DEBUG}")
     print(f"   Docs: http://localhost:8000/docs")
+    
+    # Auto-create tables for local testing
+    try:
+        from app.core.database import Base, engine
+        import app.models
+        Base.metadata.create_all(bind=engine)
+        print("[*] Database tables successfully verified/created.")
+    except Exception as e:
+        print(f"[!] Error auto-creating database tables: {e}")
+        
     yield
     # Shutdown
-    print("🛑 Shutting down CareerAI backend.")
+    print("[*] Shutting down CareerAI backend.")
 
 
 # ── FastAPI App ───────────────────────────────────────────────────────────────

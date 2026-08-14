@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     DEBUG: bool = False
 
     # ── Database (Supabase PostgreSQL) ────────────────────────────────
-    DATABASE_URL: str  # Required — must be set in .env
+    DATABASE_URL: str = "sqlite:///./careerai.db"  # Defaults to SQLite for local development
 
     # ── Supabase ──────────────────────────────────────────────────────
     SUPABASE_URL: str = ""

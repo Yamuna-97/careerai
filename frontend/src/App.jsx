@@ -8,6 +8,7 @@ import ResumeEditorPage from './pages/ResumeEditorPage';
 import ResumeHubPage from './pages/ResumeHubPage';
 import ResumeAIStudioPage from './pages/ResumeAIStudioPage';
 import ResumeTemplatesPage from './pages/ResumeTemplatesPage';
+import LaTeXEditorPage from './pages/LaTeXEditorPage';
 import InterviewLandingPage from './pages/InterviewLandingPage';
 import InterviewSetupPage from './pages/InterviewSetupPage';
 import InterviewSessionPage from './pages/InterviewSessionPage';
@@ -28,6 +29,7 @@ export default function App() {
         <Route path="/resume/builder" element={<ResumeEditorPage />} />
         <Route path="/resume/ai-studio" element={<ResumeAIStudioPage />} />
         <Route path="/resume/templates" element={<ResumeTemplatesPage />} />
+        <Route path="/resume/latex-editor" element={<LaTeXEditorPage />} />
         <Route path="/resume-editor" element={<ResumeEditorPage />} />
 
         {/* Interview Mock module */}

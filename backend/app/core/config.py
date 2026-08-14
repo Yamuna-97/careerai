@@ -38,6 +38,11 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     GEMINI_API_KEY: str = ""
 
+    # ── Adzuna Job Search API ─────────────────────────────────────────
+    # Register free at https://developer.adzuna.com
+    ADZUNA_APP_ID: str = ""
+    ADZUNA_APP_KEY: str = ""
+
     # ── Pydantic Settings ─────────────────────────────────────────────
     model_config = SettingsConfigDict(
         env_file=".env",

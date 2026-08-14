@@ -108,7 +108,7 @@ export default function ResumeHubPage() {
           </div>
 
           {/* Three Workflows Cards Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             
             {/* Card 1: Manual Builder */}
             <div className="bg-surface rounded-xl p-6 border border-outline-variant/40 shadow-sm flex flex-col justify-between hover:shadow-md transition-all group">
@@ -165,6 +165,25 @@ export default function ResumeHubPage() {
                 className="w-full mt-6 bg-surface-container-high hover:bg-surface-container text-on-surface text-center py-2.5 rounded-lg font-label-md text-xs font-bold transition-colors"
               >
                 View 20+ Designs
+              </Link>
+            </div>
+
+            {/* Card 4: LaTeX Editor */}
+            <div className="bg-surface rounded-xl p-6 border border-outline-variant/40 shadow-sm flex flex-col justify-between hover:shadow-md transition-all group">
+              <div className="space-y-3">
+                <div className="w-12 h-12 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-600 group-hover:scale-105 transition-transform">
+                  <span className="material-symbols-outlined text-2xl icon-filled">code</span>
+                </div>
+                <h3 className="font-headline-sm text-headline-sm font-bold text-on-surface">LaTeX Editor</h3>
+                <p className="font-body-sm text-xs text-on-surface-variant leading-relaxed">
+                  Build your resume utilizing source-code based LaTeX compiles. Overleaf-style split layout, templates, logs, and Gemini debugging fixes.
+                </p>
+              </div>
+              <Link
+                to="/resume/latex-editor"
+                className="w-full mt-6 bg-surface-container-high hover:bg-surface-container text-on-surface text-center py-2.5 rounded-lg font-label-md text-xs font-bold transition-colors"
+              >
+                Open LaTeX Editor
               </Link>
             </div>
 

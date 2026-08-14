@@ -85,6 +85,16 @@ export default function Sidebar() {
                         • Template Gallery
                       </Link>
                     </li>
+                    <li>
+                      <Link
+                        to="/resume/latex-editor"
+                        className={`block py-1 text-[11px] font-semibold ${
+                          location.pathname === '/resume/latex-editor' ? 'text-primary font-bold' : 'text-on-surface-variant hover:text-primary'
+                        }`}
+                      >
+                        • LaTeX Editor
+                      </Link>
+                    </li>
                   </ul>
                 )}
               </li>

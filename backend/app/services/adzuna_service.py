@@ -115,7 +115,7 @@ def _get_country_code(locations: List[str]) -> str:
         key = loc.lower().strip()
         if key in LOCATION_TO_COUNTRY:
             return LOCATION_TO_COUNTRY[key]
-    return "in"  # Default to India
+    return settings.ADZUNA_COUNTRY or "in"  # Fallback to configured country
 
 
 def _get_adzuna_location(locations: List[str]) -> Optional[str]:

@@ -1,6 +1,5 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 
 export default function InterviewSetupPage() {
@@ -105,13 +104,8 @@ export default function InterviewSetupPage() {
   };
 
   return (
-    <div className="bg-background text-on-background font-body-md min-h-screen flex pb-20 md:pb-8">
-      <Sidebar />
+    <div className="px-margin-mobile md:px-margin-desktop py-stack-lg max-w-[1000px] mx-auto w-full space-y-6 pb-20 md:pb-8">
 
-      <div className="flex-1 flex flex-col md:ml-[260px] min-h-screen w-full">
-        <Header title="Configure AI Mock Interview" subtitle="Tailor the difficulty, category, role, and context for target preparation" />
-
-        <main className="flex-grow px-margin-mobile md:px-margin-desktop py-stack-lg max-w-[1000px] mx-auto w-full flex flex-col gap-6">
           
           {/* STEP TRACKER BAR */}
           <div className="bg-surface p-4 border border-outline-variant/40 rounded-xl shadow-sm">
@@ -586,9 +580,6 @@ export default function InterviewSetupPage() {
               </div>
             </div>
           )}
-
-        </main>
-      </div>
     </div>
   );
 }

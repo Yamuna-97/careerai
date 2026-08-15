@@ -1,6 +1,5 @@
-﻿import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import Sidebar from '../components/Sidebar';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import Header from '../components/Header';
 
 export default function InterviewLandingPage() {
@@ -166,13 +165,8 @@ export default function InterviewLandingPage() {
   };
 
   return (
-    <div className="bg-background text-on-background font-body-md min-h-screen flex pb-20 md:pb-8">
-      <Sidebar />
+    <div className="px-margin-mobile md:px-margin-desktop py-stack-lg max-w-[1280px] mx-auto w-full flex flex-col gap-8 pb-20 md:pb-8">
 
-      <div className="flex-1 flex flex-col md:ml-[260px] min-h-screen w-full">
-        <Header title="AI Interview Prep Coach" subtitle="Interactive dashboards, personalized guidance, and real-time simulator" />
-
-        <main className="flex-grow px-margin-mobile md:px-margin-desktop py-stack-lg max-w-[1280px] mx-auto w-full flex flex-col gap-8">
           
           {/* HERO SECTION */}
           <section className="relative bg-gradient-to-r from-secondary-container to-primary-container text-on-primary rounded-2xl p-8 md:p-12 overflow-hidden shadow-lg flex flex-col md:flex-row items-center gap-8">
@@ -574,9 +568,6 @@ export default function InterviewLandingPage() {
               </div>
             )}
           </section>
-
-        </main>
-      </div>
     </div>
   );
 }

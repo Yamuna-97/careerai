@@ -41,9 +41,10 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str = ""
 
     # ── Adzuna Job Search API ─────────────────────────────────────────
-    # Register free at https://developer.adzuna.com
+    # Register free at https://developer.adzuna.com (250 requests/day free tier)
     ADZUNA_APP_ID: str = ""
     ADZUNA_APP_KEY: str = ""
+    ADZUNA_COUNTRY: str = "in"   # Default country code for Adzuna API searches
 
     # ── Pydantic Settings ─────────────────────────────────────────────
     model_config = SettingsConfigDict(

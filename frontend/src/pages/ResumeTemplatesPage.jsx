@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 import ResumePreview from '../components/ResumePreview';
 
@@ -72,13 +71,8 @@ export default function ResumeTemplatesPage() {
   const categories = ['All', 'ATS Friendly', 'Technology', 'Business', 'Creative', 'Academic', 'Experienced'];
 
   return (
-    <div className="bg-background text-on-background font-body-md min-h-screen flex pb-20 md:pb-8">
-      <Sidebar />
+    <div className="px-margin-mobile md:px-margin-desktop py-stack-lg max-w-[1200px] mx-auto w-full flex flex-col gap-6 pb-20 md:pb-8">
 
-      <div className="flex-1 flex flex-col md:ml-[260px] min-h-screen w-full relative">
-        <Header title="Choose Your Resume Template" subtitle="Select a design layout that matches your target role and career seniority" />
-
-        <main className="flex-grow px-margin-mobile md:px-margin-desktop py-stack-lg max-w-[1200px] mx-auto w-full flex flex-col gap-6">
           
           {/* Filters and Controls */}
           <div className="bg-surface p-4 border border-outline-variant/40 rounded-xl shadow-sm space-y-4">
@@ -193,9 +187,6 @@ export default function ResumeTemplatesPage() {
               </div>
             ))}
           </div>
-
-        </main>
-      </div>
 
       {/* Large Modal Overlay Preview */}
       {activePreviewTpl && (

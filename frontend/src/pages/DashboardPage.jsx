@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 
 /* ─── AI Chat Panel ─────────────────────────────────────────────────── */
@@ -46,11 +45,10 @@ function AIChatPanel({ onClose, userName = 'User' }) {
         {messages.map((m, i) => (
           <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div
-              className={`max-w-[85%] px-3 py-2 rounded-xl font-body-sm text-body-sm ${
-                m.role === 'user'
-                  ? 'bg-primary text-on-primary rounded-br-sm'
-                  : 'bg-surface-container-low text-on-surface rounded-bl-sm'
-              }`}
+              className={`max-w-[85%] px-3 py-2 rounded-xl font-body-sm text-body-sm ${m.role === 'user'
+                ? 'bg-primary text-on-primary rounded-br-sm'
+                : 'bg-surface-container-low text-on-surface rounded-bl-sm'
+                }`}
             >
               {m.text}
             </div>
@@ -135,7 +133,7 @@ export default function DashboardPage() {
             // Sort by updated_at descending to get the latest
             resumes.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
             const latestResume = resumes[0];
-            
+
             const statsRes = await fetch(`http://localhost:8000/api/v1/resumes/${latestResume.id}/stats`, { headers });
             if (statsRes.ok) {
               const statsData = await statsRes.json();
@@ -191,8 +189,8 @@ export default function DashboardPage() {
     },
   ];
 
-  const currentSkills = jobProfile?.profile?.skills?.length > 0 
-    ? jobProfile.profile.skills 
+  const currentSkills = jobProfile?.profile?.skills?.length > 0
+    ? jobProfile.profile.skills
     : ['Python', 'SQL', 'Machine Learning', 'Pandas', 'FastAPI'];
 
   const recommendedSkills = ['TensorFlow', 'AWS', 'Docker', 'Deep Learning'];
@@ -211,16 +209,8 @@ export default function DashboardPage() {
   const interviewOffset = 251.2 - (251.2 * interviewScore) / 100;
 
   return (
-    <div className="bg-background text-on-background font-body-md antialiased min-h-screen flex">
-      {/* Sidebar Navigation */}
-      <Sidebar />
+    <div className="flex-1 px-margin-mobile md:px-margin-desktop py-stack-lg max-w-container-max mx-auto w-full relative pb-24 md:pb-8">
 
-      {/* Main Content Area */}
-      <div className="flex-1 md:ml-[260px] flex flex-col min-h-screen pb-24 md:pb-8">
-        <Header title="Dashboard" subtitle="Your personalized career development overview." />
-
-        {/* Main Dashboard Content */}
-        <main className="flex-1 px-margin-mobile md:px-margin-desktop py-stack-lg max-w-container-max mx-auto w-full relative">
           {/* Decorative Background Orb */}
           <div className="absolute top-10 right-20 w-96 h-96 bg-primary-container/20 rounded-full blur-[100px] pointer-events-none orb-pulse z-0"></div>
 
@@ -727,10 +717,8 @@ export default function DashboardPage() {
                   </ul>
                 </div>
               </div>
-            </div>
           </div>
-        </main>
-      </div>
+        </div>
 
       {/* ── Floating AI Assistant Button ───────────────────────────── */}
       <button

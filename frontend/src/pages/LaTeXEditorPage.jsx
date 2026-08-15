@@ -1,6 +1,5 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import Sidebar from '../components/Sidebar';
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import Editor from '@monaco-editor/react';
 
@@ -463,13 +462,11 @@ Senior Product Designer with 6+ years of experience transforming complex problem
   };
 
   return (
-    <div className="bg-background text-on-background font-body-md min-h-screen flex pb-20 md:pb-8">
-      <Sidebar />
+    <div className="flex-1 w-full relative overflow-hidden flex flex-col pb-20 md:pb-8">
 
-      <div className="flex-1 flex flex-col md:ml-[260px] min-h-screen w-full relative overflow-hidden">
         
-        {/* Top Header */}
-        <header className="bg-surface border-b border-outline-variant/40 px-6 py-3 flex flex-col sm:flex-row justify-between sm:items-center gap-4 shrink-0">
+        {/* Local Page Toolbar */}
+        <div className="bg-surface border-b border-outline-variant/40 px-6 py-3 flex flex-col sm:flex-row justify-between sm:items-center gap-4 shrink-0">
           <div>
             <h2 className="font-headline-sm text-headline-sm font-bold text-on-surface">LaTeX Resume Editor</h2>
             <input
@@ -508,7 +505,7 @@ Senior Product Designer with 6+ years of experience transforming complex problem
               Import to Builder
             </button>
           </div>
-        </header>
+        </div>
 
         {/* Editor IDE Sandbox area */}
         <div className="flex-grow flex overflow-hidden w-full relative">
@@ -793,10 +790,7 @@ Senior Product Designer with 6+ years of experience transforming complex problem
               <span className="material-symbols-outlined text-base">auto_awesome</span>
             </button>
           )}
-
         </div>
-
-      </div>
 
       {/* MODAL: New File */}
       {showNewFileModal && (
@@ -868,7 +862,6 @@ Senior Product Designer with 6+ years of experience transforming complex problem
           </div>
         </div>
       )}
-
     </div>
   );
 }

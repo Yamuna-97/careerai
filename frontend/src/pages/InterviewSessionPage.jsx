@@ -1,6 +1,5 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 
 export default function InterviewSessionPage() {
@@ -386,16 +385,8 @@ export default function InterviewSessionPage() {
   }
 
   return (
-    <div className="bg-surface-bright text-on-surface font-body-md min-h-screen flex pb-20 md:pb-8">
-      <Sidebar />
+    <div className="px-margin-mobile md:px-margin-desktop py-stack-lg max-w-container-max mx-auto w-full grid grid-cols-1 lg:grid-cols-12 gap-gutter pb-20 md:pb-8">
 
-      <div className="flex-1 flex flex-col md:ml-[260px] min-h-screen relative">
-        <Header
-          title="AI Mock Interview Coach"
-          subtitle={`Role: ${session?.role} • Mode: ${session?.interview_type} (${session?.difficulty?.toUpperCase()})`}
-        />
-
-        <main className="flex-1 px-margin-mobile md:px-margin-desktop py-stack-lg max-w-container-max mx-auto w-full grid grid-cols-1 lg:grid-cols-12 gap-gutter">
           
           {/* Main simulator screen */}
           <div className="lg:col-span-8 flex flex-col gap-stack-lg">
@@ -695,8 +686,6 @@ export default function InterviewSessionPage() {
             </div>
 
           </div>
-        </main>
-      </div>
     </div>
   );
 }

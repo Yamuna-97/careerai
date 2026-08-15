@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 
 export default function ResumeHubPage() {
@@ -44,13 +43,8 @@ export default function ResumeHubPage() {
   }, []);
 
   return (
-    <div className="bg-background text-on-background font-body-md min-h-screen flex pb-20 md:pb-8">
-      <Sidebar />
+    <div className="px-margin-mobile md:px-margin-desktop py-stack-lg max-w-[1100px] mx-auto w-full flex flex-col gap-8 pb-20 md:pb-8">
 
-      <div className="flex-1 flex flex-col md:ml-[260px] min-h-screen w-full">
-        <Header title="CareerAI Resume Center" subtitle="Build, optimize, and style your professional resumes with manual tools and AI assistance" />
-
-        <main className="flex-grow px-margin-mobile md:px-margin-desktop py-stack-lg max-w-[1100px] mx-auto w-full flex flex-col gap-8">
           
           {/* Hero Section */}
           <div className="bg-surface rounded-2xl border border-outline-variant/40 shadow-sm p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
@@ -188,9 +182,6 @@ export default function ResumeHubPage() {
             </div>
 
           </div>
-
-        </main>
-      </div>
     </div>
   );
 }

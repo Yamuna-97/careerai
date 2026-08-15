@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 import ResumePreview from '../components/ResumePreview';
 
@@ -63,273 +62,268 @@ export default function ResumeEditorPage() {
   };
 
   return (
-    <div className="bg-background text-on-background font-body-md min-h-screen flex overflow-hidden">
-      {/* SideNavBar */}
-      <Sidebar />
+    <div className="flex-1 flex flex-col w-full min-h-[calc(100vh-4rem)]">
 
-      {/* Main Content Wrapper */}
-      <div className="flex-1 flex flex-col md:ml-[260px] w-full min-h-screen h-screen">
-        {/* TopNavBar */}
-        <header className="bg-surface/80 backdrop-blur-md sticky top-0 right-0 left-0 z-40 flex justify-between items-center px-margin-mobile md:px-margin-desktop h-16 border-b border-outline-variant">
-          <div className="flex items-center gap-4">
-            <div className="flex flex-col">
-              <h2 className="font-headline-sm text-headline-sm font-extrabold text-on-background">Resume Builder</h2>
-              <span className="font-label-sm text-label-sm text-on-surface-variant flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-tertiary"></span>
-                Autosaved to cloud
-              </span>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleImproveWithAI}
-              className="hidden sm:flex items-center gap-2 bg-gradient-to-r from-primary-container to-secondary text-on-primary px-4 py-2 rounded-lg font-label-md text-label-md hover:opacity-90 transition-opacity shadow-sm cursor-pointer"
-            >
-              <span className="material-symbols-outlined text-sm">auto_awesome</span>
-              ✨ Improve with AI
-            </button>
-            <button
-              onClick={() => window.print()}
-              className="flex items-center gap-2 border border-outline-variant text-on-surface px-4 py-2 rounded-lg font-label-md text-label-md hover:bg-surface-container transition-colors shadow-sm bg-surface cursor-pointer"
-            >
-              <span className="material-symbols-outlined text-sm">download</span>
-              <span className="hidden sm:inline">Export PDF</span>
-            </button>
-          </div>
-        </header>
 
-        {/* Builder Workspace */}
-        <main className="flex-1 flex flex-col lg:flex-row overflow-hidden bg-surface-container-lowest pb-16 md:pb-0">
-          {/* Left Panel: Editor */}
-          <section className="w-full lg:w-[45%] xl:w-[40%] flex flex-col border-r border-outline-variant bg-surface relative h-full">
-            {/* Section Tabs */}
-            <div className="p-stack-md border-b border-outline-variant bg-surface/95 backdrop-blur z-10">
-              <div className="flex space-x-2 overflow-x-auto pb-1 scrollbar-hide">
-                {['personal', 'experience', 'skills', 'education'].map((tab) => (
-                  <button
-                    key={tab}
-                    onClick={() => setActiveTab(tab)}
-                    className={`whitespace-nowrap px-4 py-1.5 rounded-full font-label-md text-label-md transition-colors capitalize ${
-                      activeTab === tab
-                        ? 'bg-primary-container/10 text-primary border border-primary/20 font-bold'
-                        : 'text-on-surface-variant hover:bg-surface-container'
+      {/* Local Page Action Bar */}
+      <div className="bg-surface/80 backdrop-blur-md sticky top-0 right-0 left-0 z-10 flex justify-between items-center px-margin-mobile md:px-margin-desktop h-16 border-b border-outline-variant">
+        <div className="flex items-center gap-4">
+          <div className="flex flex-col">
+            <h2 className="font-headline-sm text-headline-sm font-extrabold text-on-background">Resume Builder</h2>
+            <span className="font-label-sm text-label-sm text-on-surface-variant flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-tertiary"></span>
+              Autosaved to cloud
+            </span>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleImproveWithAI}
+            className="hidden sm:flex items-center gap-2 bg-gradient-to-r from-primary-container to-secondary text-on-primary px-4 py-2 rounded-lg font-label-md text-label-md hover:opacity-90 transition-opacity shadow-sm cursor-pointer"
+          >
+            <span className="material-symbols-outlined text-sm">auto_awesome</span>
+            ✨ Improve with AI
+          </button>
+          <button
+            onClick={() => window.print()}
+            className="flex items-center gap-2 border border-outline-variant text-on-surface px-4 py-2 rounded-lg font-label-md text-label-md hover:bg-surface-container transition-colors shadow-sm bg-surface cursor-pointer"
+          >
+            <span className="material-symbols-outlined text-sm">download</span>
+            <span className="hidden sm:inline">Export PDF</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Builder Workspace */}
+      <main className="flex-1 flex flex-col lg:flex-row overflow-hidden bg-surface-container-lowest pb-16 md:pb-0">
+        {/* Left Panel: Editor */}
+        <section className="w-full lg:w-[45%] xl:w-[40%] flex flex-col border-r border-outline-variant bg-surface relative h-full">
+          {/* Section Tabs */}
+          <div className="p-stack-md border-b border-outline-variant bg-surface/95 backdrop-blur z-10">
+            <div className="flex space-x-2 overflow-x-auto pb-1 scrollbar-hide">
+              {['personal', 'experience', 'skills', 'education'].map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`whitespace-nowrap px-4 py-1.5 rounded-full font-label-md text-label-md transition-colors capitalize ${activeTab === tab
+                      ? 'bg-primary-container/10 text-primary border border-primary/20 font-bold'
+                      : 'text-on-surface-variant hover:bg-surface-container'
                     }`}
-                  >
-                    {tab === 'personal' ? 'Personal Info' : tab}
-                  </button>
-                ))}
-              </div>
+                >
+                  {tab === 'personal' ? 'Personal Info' : tab}
+                </button>
+              ))}
             </div>
+          </div>
 
-            {/* Editor Form Area */}
-            <div className="flex-1 overflow-y-auto editor-scroll p-stack-lg space-y-stack-lg">
-              {activeTab === 'personal' && (
-                <div className="space-y-stack-md">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-headline-sm text-headline-sm text-on-background flex items-center gap-2">
-                      <span className="material-symbols-outlined text-primary">person</span>
-                      Personal Details
-                    </h3>
+          {/* Editor Form Area */}
+          <div className="flex-1 overflow-y-auto editor-scroll p-stack-lg space-y-stack-lg">
+            {activeTab === 'personal' && (
+              <div className="space-y-stack-md">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-headline-sm text-headline-sm text-on-background flex items-center gap-2">
+                    <span className="material-symbols-outlined text-primary">person</span>
+                    Personal Details
+                  </h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-stack-md">
+                  <div className="space-y-1">
+                    <label className="font-label-sm text-label-sm text-on-surface-variant">First Name</label>
+                    <input
+                      className="w-full px-3 py-2 bg-surface border border-outline-variant rounded-lg focus:outline-none input-focus-ring font-body-md text-on-surface shadow-sm"
+                      type="text"
+                      value={resumeData.firstName}
+                      onChange={(e) => setResumeData({ ...resumeData, firstName: e.target.value })}
+                    />
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-stack-md">
-                    <div className="space-y-1">
-                      <label className="font-label-sm text-label-sm text-on-surface-variant">First Name</label>
-                      <input
-                        className="w-full px-3 py-2 bg-surface border border-outline-variant rounded-lg focus:outline-none input-focus-ring font-body-md text-on-surface shadow-sm"
-                        type="text"
-                        value={resumeData.firstName}
-                        onChange={(e) => setResumeData({ ...resumeData, firstName: e.target.value })}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="font-label-sm text-label-sm text-on-surface-variant">Last Name</label>
-                      <input
-                        className="w-full px-3 py-2 bg-surface border border-outline-variant rounded-lg focus:outline-none input-focus-ring font-body-md text-on-surface shadow-sm"
-                        type="text"
-                        value={resumeData.lastName}
-                        onChange={(e) => setResumeData({ ...resumeData, lastName: e.target.value })}
-                      />
-                    </div>
-                    <div className="space-y-1 md:col-span-2">
-                      <label className="font-label-sm text-label-sm text-on-surface-variant">Professional Title</label>
-                      <input
-                        className="w-full px-3 py-2 bg-surface border border-outline-variant rounded-lg focus:outline-none input-focus-ring font-body-md text-on-surface shadow-sm"
-                        type="text"
-                        value={resumeData.title}
-                        onChange={(e) => setResumeData({ ...resumeData, title: e.target.value })}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="font-label-sm text-label-sm text-on-surface-variant">Email</label>
-                      <input
-                        className="w-full px-3 py-2 bg-surface border border-outline-variant rounded-lg focus:outline-none input-focus-ring font-body-md text-on-surface shadow-sm"
-                        type="email"
-                        value={resumeData.email}
-                        onChange={(e) => setResumeData({ ...resumeData, email: e.target.value })}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="font-label-sm text-label-sm text-on-surface-variant">Phone</label>
-                      <input
-                        className="w-full px-3 py-2 bg-surface border border-outline-variant rounded-lg focus:outline-none input-focus-ring font-body-md text-on-surface shadow-sm"
-                        type="tel"
-                        value={resumeData.phone}
-                        onChange={(e) => setResumeData({ ...resumeData, phone: e.target.value })}
-                      />
-                    </div>
+                  <div className="space-y-1">
+                    <label className="font-label-sm text-label-sm text-on-surface-variant">Last Name</label>
+                    <input
+                      className="w-full px-3 py-2 bg-surface border border-outline-variant rounded-lg focus:outline-none input-focus-ring font-body-md text-on-surface shadow-sm"
+                      type="text"
+                      value={resumeData.lastName}
+                      onChange={(e) => setResumeData({ ...resumeData, lastName: e.target.value })}
+                    />
                   </div>
-
-                  <hr className="border-outline-variant my-stack-md" />
-
-                  {/* Summary */}
-                  <div className="space-y-stack-xs">
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-headline-sm text-headline-sm text-on-background flex items-center gap-2">
-                        <span className="material-symbols-outlined text-secondary">subject</span>
-                        Professional Summary
-                      </h3>
-                      <button
-                        onClick={handleImproveWithAI}
-                        className="flex items-center gap-1 text-secondary hover:text-secondary-container transition-colors text-sm font-label-md bg-secondary/10 px-2 py-1 rounded cursor-pointer"
-                      >
-                        <span className="material-symbols-outlined text-xs">auto_awesome</span>
-                        AI Polish
-                      </button>
-                    </div>
-                    <textarea
-                      className="w-full px-3 py-2 bg-surface border border-outline-variant rounded-lg focus:outline-none input-focus-ring font-body-md text-on-surface shadow-sm resize-none"
-                      rows={5}
-                      value={resumeData.summary}
-                      onChange={(e) => setResumeData({ ...resumeData, summary: e.target.value })}
+                  <div className="space-y-1 md:col-span-2">
+                    <label className="font-label-sm text-label-sm text-on-surface-variant">Professional Title</label>
+                    <input
+                      className="w-full px-3 py-2 bg-surface border border-outline-variant rounded-lg focus:outline-none input-focus-ring font-body-md text-on-surface shadow-sm"
+                      type="text"
+                      value={resumeData.title}
+                      onChange={(e) => setResumeData({ ...resumeData, title: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="font-label-sm text-label-sm text-on-surface-variant">Email</label>
+                    <input
+                      className="w-full px-3 py-2 bg-surface border border-outline-variant rounded-lg focus:outline-none input-focus-ring font-body-md text-on-surface shadow-sm"
+                      type="email"
+                      value={resumeData.email}
+                      onChange={(e) => setResumeData({ ...resumeData, email: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="font-label-sm text-label-sm text-on-surface-variant">Phone</label>
+                    <input
+                      className="w-full px-3 py-2 bg-surface border border-outline-variant rounded-lg focus:outline-none input-focus-ring font-body-md text-on-surface shadow-sm"
+                      type="tel"
+                      value={resumeData.phone}
+                      onChange={(e) => setResumeData({ ...resumeData, phone: e.target.value })}
                     />
                   </div>
                 </div>
-              )}
 
-              {activeTab === 'experience' && (
-                <div className="space-y-stack-md">
-                  <h3 className="font-headline-sm text-headline-sm text-on-background flex items-center gap-2">
-                    <span className="material-symbols-outlined text-primary">work_history</span>
-                    Work Experience
-                  </h3>
-                  {resumeData.experiences.map((exp, idx) => (
-                    <div key={idx} className="p-stack-md bg-surface-container-lowest border border-outline-variant rounded-lg space-y-2">
-                      <div className="flex justify-between font-bold">
-                        <span>{exp.role}</span>
-                        <span className="text-on-surface-variant text-sm">{exp.period}</span>
-                      </div>
-                      <p className="text-sm text-primary">{exp.company} • {exp.location}</p>
-                      <ul className="list-disc list-inside text-sm text-on-surface-variant space-y-1">
-                        {exp.bullets.map((b, bIdx) => (
-                          <li key={bIdx}>{b}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  ))}
+                <hr className="border-outline-variant my-stack-md" />
+
+                {/* Summary */}
+                <div className="space-y-stack-xs">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-headline-sm text-headline-sm text-on-background flex items-center gap-2">
+                      <span className="material-symbols-outlined text-secondary">subject</span>
+                      Professional Summary
+                    </h3>
+                    <button
+                      onClick={handleImproveWithAI}
+                      className="flex items-center gap-1 text-secondary hover:text-secondary-container transition-colors text-sm font-label-md bg-secondary/10 px-2 py-1 rounded cursor-pointer"
+                    >
+                      <span className="material-symbols-outlined text-xs">auto_awesome</span>
+                      AI Polish
+                    </button>
+                  </div>
+                  <textarea
+                    className="w-full px-3 py-2 bg-surface border border-outline-variant rounded-lg focus:outline-none input-focus-ring font-body-md text-on-surface shadow-sm resize-none"
+                    rows={5}
+                    value={resumeData.summary}
+                    onChange={(e) => setResumeData({ ...resumeData, summary: e.target.value })}
+                  />
                 </div>
-              )}
+              </div>
+            )}
 
-              {activeTab === 'skills' && (
-                <div className="space-y-stack-md">
-                  <h3 className="font-headline-sm text-headline-sm text-on-background flex items-center gap-2">
-                    <span className="material-symbols-outlined text-tertiary">psychology</span>
-                    Skills & Competencies
-                  </h3>
-                  <div className="space-y-3">
-                    <div>
-                      <label className="font-label-sm text-label-sm text-on-surface-variant">Design Skills</label>
-                      <input
-                        className="w-full px-3 py-2 bg-surface border border-outline-variant rounded-lg font-body-md text-on-surface"
-                        type="text"
-                        value={resumeData.skills.design}
-                        onChange={(e) =>
-                          setResumeData({
-                            ...resumeData,
-                            skills: { ...resumeData.skills, design: e.target.value },
-                          })
-                        }
-                      />
+            {activeTab === 'experience' && (
+              <div className="space-y-stack-md">
+                <h3 className="font-headline-sm text-headline-sm text-on-background flex items-center gap-2">
+                  <span className="material-symbols-outlined text-primary">work_history</span>
+                  Work Experience
+                </h3>
+                {resumeData.experiences.map((exp, idx) => (
+                  <div key={idx} className="p-stack-md bg-surface-container-lowest border border-outline-variant rounded-lg space-y-2">
+                    <div className="flex justify-between font-bold">
+                      <span>{exp.role}</span>
+                      <span className="text-on-surface-variant text-sm">{exp.period}</span>
                     </div>
-                    <div>
-                      <label className="font-label-sm text-label-sm text-on-surface-variant">Tools & Tech</label>
-                      <input
-                        className="w-full px-3 py-2 bg-surface border border-outline-variant rounded-lg font-body-md text-on-surface"
-                        type="text"
-                        value={resumeData.skills.tools}
-                        onChange={(e) =>
-                          setResumeData({
-                            ...resumeData,
-                            skills: { ...resumeData.skills, tools: e.target.value },
-                          })
-                        }
-                      />
-                    </div>
+                    <p className="text-sm text-primary">{exp.company} • {exp.location}</p>
+                    <ul className="list-disc list-inside text-sm text-on-surface-variant space-y-1">
+                      {exp.bullets.map((b, bIdx) => (
+                        <li key={bIdx}>{b}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {activeTab === 'skills' && (
+              <div className="space-y-stack-md">
+                <h3 className="font-headline-sm text-headline-sm text-on-background flex items-center gap-2">
+                  <span className="material-symbols-outlined text-tertiary">psychology</span>
+                  Skills & Competencies
+                </h3>
+                <div className="space-y-3">
+                  <div>
+                    <label className="font-label-sm text-label-sm text-on-surface-variant">Design Skills</label>
+                    <input
+                      className="w-full px-3 py-2 bg-surface border border-outline-variant rounded-lg font-body-md text-on-surface"
+                      type="text"
+                      value={resumeData.skills.design}
+                      onChange={(e) =>
+                        setResumeData({
+                          ...resumeData,
+                          skills: { ...resumeData.skills, design: e.target.value },
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="font-label-sm text-label-sm text-on-surface-variant">Tools & Tech</label>
+                    <input
+                      className="w-full px-3 py-2 bg-surface border border-outline-variant rounded-lg font-body-md text-on-surface"
+                      type="text"
+                      value={resumeData.skills.tools}
+                      onChange={(e) =>
+                        setResumeData({
+                          ...resumeData,
+                          skills: { ...resumeData.skills, tools: e.target.value },
+                        })
+                      }
+                    />
                   </div>
                 </div>
-              )}
+              </div>
+            )}
 
-              {activeTab === 'education' && (
-                <div className="space-y-stack-md">
-                  <h3 className="font-headline-sm text-headline-sm text-on-background flex items-center gap-2">
-                    <span className="material-symbols-outlined text-primary">school</span>
-                    Education
-                  </h3>
-                  <div className="p-stack-md bg-surface-container-lowest border border-outline-variant rounded-lg">
-                    <h4 className="font-bold">{resumeData.education.degree}</h4>
-                    <p className="text-sm text-primary">{resumeData.education.school}</p>
-                    <p className="text-xs text-on-surface-variant">{resumeData.education.period}</p>
-                  </div>
+            {activeTab === 'education' && (
+              <div className="space-y-stack-md">
+                <h3 className="font-headline-sm text-headline-sm text-on-background flex items-center gap-2">
+                  <span className="material-symbols-outlined text-primary">school</span>
+                  Education
+                </h3>
+                <div className="p-stack-md bg-surface-container-lowest border border-outline-variant rounded-lg">
+                  <h4 className="font-bold">{resumeData.education.degree}</h4>
+                  <p className="text-sm text-primary">{resumeData.education.school}</p>
+                  <p className="text-xs text-on-surface-variant">{resumeData.education.period}</p>
                 </div>
-              )}
+              </div>
+            )}
 
-              <button className="w-full py-3 border-2 border-dashed border-outline-variant rounded-xl flex items-center justify-center gap-2 text-on-surface-variant hover:text-primary hover:border-primary hover:bg-surface-container-low transition-all cursor-pointer">
-                <span className="material-symbols-outlined">add_circle</span>
-                <span className="font-label-md text-label-md">Add Custom Section</span>
-              </button>
-            </div>
-          </section>
+            <button className="w-full py-3 border-2 border-dashed border-outline-variant rounded-xl flex items-center justify-center gap-2 text-on-surface-variant hover:text-primary hover:border-primary hover:bg-surface-container-low transition-all cursor-pointer">
+              <span className="material-symbols-outlined">add_circle</span>
+              <span className="font-label-md text-label-md">Add Custom Section</span>
+            </button>
+          </div>
+        </section>
 
-          {/* Right Panel: Live Document Preview */}
-          <section className="flex-1 bg-surface-container flex flex-col relative h-full overflow-hidden">
-            {/* Preview Toolbar */}
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 bg-surface/90 backdrop-blur shadow-md rounded-full px-4 py-2 flex items-center gap-4 border border-outline-variant">
-              <button
-                onClick={() => setZoom((z) => Math.max(z - 10, 50))}
-                className="p-1 text-on-surface-variant hover:text-primary rounded-full hover:bg-surface-container transition-colors"
-                title="Zoom Out"
-              >
-                <span className="material-symbols-outlined">zoom_out</span>
-              </button>
-              <span className="font-label-sm text-label-sm">{zoom}%</span>
-              <button
-                onClick={() => setZoom((z) => Math.min(z + 10, 120))}
-                className="p-1 text-on-surface-variant hover:text-primary rounded-full hover:bg-surface-container transition-colors"
-                title="Zoom In"
-              >
-                <span className="material-symbols-outlined">zoom_in</span>
-              </button>
-              <div className="w-px h-4 bg-outline-variant"></div>
-              <span className="text-xs font-label-sm text-primary font-bold">{selectedTemplate} Template</span>
-            </div>
+        {/* Right Panel: Live Document Preview */}
+        <section className="flex-1 bg-surface-container flex flex-col relative h-full overflow-hidden">
+          {/* Preview Toolbar */}
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 bg-surface/90 backdrop-blur shadow-md rounded-full px-4 py-2 flex items-center gap-4 border border-outline-variant">
+            <button
+              onClick={() => setZoom((z) => Math.max(z - 10, 50))}
+              className="p-1 text-on-surface-variant hover:text-primary rounded-full hover:bg-surface-container transition-colors"
+              title="Zoom Out"
+            >
+              <span className="material-symbols-outlined">zoom_out</span>
+            </button>
+            <span className="font-label-sm text-label-sm">{zoom}%</span>
+            <button
+              onClick={() => setZoom((z) => Math.min(z + 10, 120))}
+              className="p-1 text-on-surface-variant hover:text-primary rounded-full hover:bg-surface-container transition-colors"
+              title="Zoom In"
+            >
+              <span className="material-symbols-outlined">zoom_in</span>
+            </button>
+            <div className="w-px h-4 bg-outline-variant"></div>
+            <span className="text-xs font-label-sm text-primary font-bold">{selectedTemplate} Template</span>
+          </div>
 
-            {/* Document Canvas */}
-            <div className="flex-1 overflow-y-auto editor-scroll p-8 md:p-12 flex justify-center items-start pt-16">
-              <ResumePreview resumeData={resumeData} templateId={selectedTemplate} scale={zoom} />
-            </div>
+          {/* Document Canvas */}
+          <div className="flex-1 overflow-y-auto editor-scroll p-8 md:p-12 flex justify-center items-start pt-16">
+            <ResumePreview resumeData={resumeData} templateId={selectedTemplate} scale={zoom} />
+          </div>
 
-            {/* Template Selector Thumbnail Strip */}
-            <div className="h-20 bg-surface border-t border-outline-variant px-6 flex items-center gap-6 shrink-0 z-20">
-              <span className="font-label-sm text-label-sm text-on-surface-variant font-bold">Active Layout: {selectedTemplate}</span>
-              <Link
-                to="/resume/templates"
-                className="px-4 py-1.5 border border-outline-variant hover:bg-surface-container text-on-surface rounded-lg font-label-md text-xs font-bold transition-all shadow-sm bg-surface cursor-pointer"
-              >
-                Browse 20+ Template Layouts →
-              </Link>
-            </div>
-          </section>
-        </main>
-      </div>
+          {/* Template Selector Thumbnail Strip */}
+          <div className="h-20 bg-surface border-t border-outline-variant px-6 flex items-center gap-6 shrink-0 z-20">
+            <span className="font-label-sm text-label-sm text-on-surface-variant font-bold">Active Layout: {selectedTemplate}</span>
+            <Link
+              to="/resume/templates"
+              className="px-4 py-1.5 border border-outline-variant hover:bg-surface-container text-on-surface rounded-lg font-label-md text-xs font-bold transition-all shadow-sm bg-surface cursor-pointer"
+            >
+              Browse 20+ Template Layouts →
+            </Link>
+          </div>
+        </section>
+      </main>
     </div>
   );
 }

@@ -1,5 +1,7 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import JobCard from './JobCard';
+
+const RESULTS_PER_PAGE = 20;
 
 export default function JobResults({ profile, onOpenJobDetails, onEditPreferences, onSearchFromResume }) {
   const [jobs, setJobs] = useState([]);

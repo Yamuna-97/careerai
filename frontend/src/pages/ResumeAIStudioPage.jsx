@@ -1,6 +1,5 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 import ResumePreview from '../components/ResumePreview';
 
@@ -264,11 +263,8 @@ export default function ResumeAIStudioPage() {
   };
 
   return (
-    <div className="bg-background text-on-background font-body-md min-h-screen flex pb-20 md:pb-8">
-      <Sidebar />
+    <div className="flex-1 w-full relative pb-20 md:pb-8">
 
-      <div className="flex-1 flex flex-col md:ml-[260px] min-h-screen w-full relative">
-        <Header title="AI Resume Studio" subtitle="Generate, refine, and grade your resume against target roles with Gemini AI" />
 
         {/* ── LANDING VIEW ── */}
         {viewState === 'LANDING' && (
@@ -821,8 +817,6 @@ export default function ResumeAIStudioPage() {
 
           </main>
         )}
-
-      </div>
     </div>
   );
 }

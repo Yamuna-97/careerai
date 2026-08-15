@@ -1,6 +1,5 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 
 export default function InterviewEvaluationPage() {
@@ -110,14 +109,8 @@ export default function InterviewEvaluationPage() {
   }
 
   return (
-    <div className="bg-background text-on-background font-body-md min-h-screen flex pb-20 md:pb-8">
-      <Sidebar />
+    <div className="p-margin-mobile md:p-margin-desktop w-full max-w-container-max mx-auto space-y-stack-lg flex flex-col gap-6 pb-20 md:pb-8">
 
-      <div className="flex-1 w-full md:ml-[260px] flex flex-col min-h-screen">
-        <Header title="AI Interview Evaluation Report" subtitle={`Role: ${session?.role} • Detailed Mock Scorecard`} />
-
-        <main className="flex-1 p-margin-mobile md:p-margin-desktop overflow-y-auto">
-          <div className="max-w-container-max mx-auto space-y-stack-lg flex flex-col gap-6">
             
             {/* Top Bar Actions */}
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
@@ -337,9 +330,6 @@ export default function InterviewEvaluationPage() {
               </div>
             </div>
 
-          </div>
-        </main>
-      </div>
     </div>
   );
 }

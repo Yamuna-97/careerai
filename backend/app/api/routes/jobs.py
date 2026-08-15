@@ -6,6 +6,7 @@ Supports profile CRUD, Adzuna search proxying, match scoring,
 job saving/bookmarks, application status tracking, and Gemini analysis.
 """
 
+import json
 import uuid
 from typing import Dict, List, Optional
 from datetime import datetime

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
@@ -57,7 +57,7 @@ export default function InterviewLandingPage() {
     // Fetch real data from FastAPI backend
     const fetchData = async () => {
       try {
-        const token = 'mock_user_token';
+        const token = localStorage.getItem('token');
         
         // Fetch Stats
         const statsRes = await fetch('http://localhost:8000/api/v1/interviews/readiness', {
@@ -93,7 +93,7 @@ export default function InterviewLandingPage() {
 
   const handleStartBeginnerPractice = async () => {
     try {
-      const token = 'mock_user_token';
+      const token = localStorage.getItem('token');
       const payload = {
         role: 'Software Engineer',
         difficulty: 'beginner',
@@ -128,7 +128,7 @@ export default function InterviewLandingPage() {
 
   const handlePracticeAgain = async (sessionId) => {
     try {
-      const token = 'mock_user_token';
+      const token = localStorage.getItem('token');
       const res = await fetch(`http://localhost:8000/api/v1/interviews/${sessionId}/practice-again`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
@@ -147,7 +147,7 @@ export default function InterviewLandingPage() {
   const handleDeleteSession = async (sessionId) => {
     if (!window.confirm("Are you sure you want to delete this interview record?")) return;
     try {
-      const token = 'mock_user_token';
+      const token = localStorage.getItem('token');
       const res = await fetch(`http://localhost:8000/api/v1/interviews/${sessionId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }

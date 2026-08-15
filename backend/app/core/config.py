@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     SUPABASE_KEY: str = ""
     # JWT secret from Supabase Dashboard → Settings → API → JWT Secret
     SUPABASE_JWT_SECRET: str = ""
+    # JWKS endpoint for ES256 public key verification (Supabase default since ~2024)
+    SUPABASE_JWKS_URL: str = ""
 
     # ── CORS ──────────────────────────────────────────────────────────
     # Comma-separated list of allowed frontend origins

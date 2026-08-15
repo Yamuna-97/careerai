@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { supabase } from '../utils/supabase';
 
 export default function SignupPage() {
   const navigate = useNavigate();
@@ -10,10 +11,81 @@ export default function SignupPage() {
     terms: true,
   });
   const [showPassword, setShowPassword] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    navigate('/dashboard');
+    if (isSubmitting) return;
+    setErrorMsg('');
+    setIsSubmitting(true);
+
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+        options: {
+          data: {
+            full_name: formData.name
+          }
+        }
+      });
+
+      if (error) {
+        console.error("Supabase signup error:", error);
+        
+        const isRateLimit = error.status === 429 || 
+                            (error.message && error.message.toLowerCase().includes("rate limit")) ||
+                            (error.message && error.message.toLowerCase().includes("too many requests"));
+                            
+        if (isRateLimit) {
+          setErrorMsg("Email verification is temporarily rate-limited. Please wait and try again later.");
+        } else {
+          setErrorMsg(error.message);
+        }
+        setIsSubmitting(false);
+        return;
+      }
+
+      const session = data.session;
+      const user = data.user;
+
+      if (user) {
+        if (session) {
+          localStorage.setItem('token', session.access_token);
+          
+          // Sync real profile data to local DB using the verified JWT
+          const syncRes = await fetch("http://localhost:8000/api/v1/auth/sync", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${session.access_token}`
+            },
+            body: JSON.stringify({
+              id: user.id,
+              email: user.email,
+              // Use the name exactly as typed in the form
+              full_name: formData.name.trim()
+            })
+          });
+
+          if (syncRes.ok) {
+            navigate('/dashboard');
+          } else {
+            setErrorMsg("Could not register profile in application database.");
+          }
+        } else {
+          // Email confirmation is enabled in Supabase Dashboard
+          alert("Signup successful! Please check your email to verify your account, then log in.");
+          navigate('/login');
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      setErrorMsg("An unexpected registration error occurred.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const getStrength = (pass) => {
@@ -41,6 +113,11 @@ export default function SignupPage() {
           <p className="font-body-md text-body-md text-on-surface-variant mt-stack-xs">
             Start optimizing your career trajectory with AI-driven guidance.
           </p>
+          {errorMsg && (
+            <p className="text-xs text-error font-bold mt-2 bg-error-container/20 p-2 rounded">
+              {errorMsg}
+            </p>
+          )}
         </div>
 
         {/* Form Container */}
@@ -176,10 +253,11 @@ export default function SignupPage() {
 
           {/* Submit Action */}
           <button
-            className="w-full h-12 bg-primary-container text-on-primary rounded-[10px] font-label-md text-label-md shadow-md hover:bg-[#4338CA] hover:-translate-y-[1px] hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2"
+            className="w-full h-12 bg-primary-container text-on-primary rounded-[10px] font-label-md text-label-md shadow-md hover:bg-[#4338CA] hover:-translate-y-[1px] hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50"
             type="submit"
+            disabled={isSubmitting}
           >
-            Get Started
+            {isSubmitting ? 'Registering...' : 'Get Started'}
             <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
           </button>
         </form>

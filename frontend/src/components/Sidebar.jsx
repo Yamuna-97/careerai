@@ -7,9 +7,9 @@ export default function Sidebar() {
     { name: 'Dashboard', path: '/dashboard', icon: 'dashboard' },
     { name: 'Resume Hub', path: '/resume', icon: 'description' },
     { name: 'Interview Prep', path: '/interview', icon: 'mic' },
-    { name: 'Jobs', path: '/jobs', icon: 'work' },
+    { name: 'Find Jobs', path: '/jobs', icon: 'work' },
     { name: 'Interview Results', path: '/interview-evaluation', icon: 'insights' },
-    { name: 'Saved Jobs', path: '/jobs', icon: 'bookmark' },
+    { name: 'Saved Jobs', path: '/jobs?tab=saved', icon: 'bookmark' },
   ];
 
   // Helper to check if location is in resume workflows
@@ -35,7 +35,12 @@ export default function Sidebar() {
         {/* Navigation Links */}
         <ul className="flex flex-col gap-1 px-stack-sm flex-grow">
           {navItems.map((item) => {
-            const isActive = item.path === '/resume' ? isResumePath : location.pathname === item.path;
+            const currentFull = location.pathname + location.search;
+            const isActive = item.path === '/resume'
+              ? isResumePath
+              : item.path.includes('?')
+                ? currentFull === item.path
+                : location.pathname === item.path && !location.search;
             return (
               <li key={item.name + item.path}>
                 <Link

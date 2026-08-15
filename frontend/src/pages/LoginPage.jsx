@@ -1,16 +1,62 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { supabase } from '../utils/supabase';
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState('user@example.com');
-  const [password, setPassword] = useState('password123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    navigate('/dashboard');
+    if (isSubmitting) return;
+    setErrorMsg('');
+    setIsSubmitting(true);
+
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      
+      if (error) {
+        setErrorMsg(error.message);
+        setIsSubmitting(false);
+        return;
+      }
+
+      const session = data.session;
+      if (session) {
+        // Save the access token for API requests
+        localStorage.setItem('token', session.access_token);
+        
+        // Sync user profile to backend local database
+        const syncRes = await fetch("http://localhost:8000/api/v1/auth/sync", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify({
+            id: session.user.id,
+            email: session.user.email,
+            full_name: session.user.user_metadata?.full_name || session.user.email.split('@')[0]
+          })
+        });
+
+        if (syncRes.ok) {
+          navigate('/dashboard');
+        } else {
+          setErrorMsg("Could not sync user profile with database.");
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      setErrorMsg("An unexpected login error occurred.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -23,6 +69,11 @@ export default function LoginPage() {
           <h1 className="font-headline-lg text-headline-lg md:font-headline-lg md:text-headline-lg text-on-surface">
             <Link to="/" className="hover:text-primary transition-colors">CareerAI</Link>
           </h1>
+          {errorMsg && (
+            <p className="text-xs text-error font-bold mt-2 bg-error-container/20 p-2 rounded">
+              {errorMsg}
+            </p>
+          )}
           <p className="font-body-sm text-body-sm text-on-surface-variant mt-stack-xs">
             Welcome back. Please enter your details.
           </p>
@@ -87,10 +138,11 @@ export default function LoginPage() {
           </div>
 
           <button
-            className="w-full bg-primary-container text-on-primary rounded-lg py-3 font-label-md text-label-md hover:bg-[#4338CA] transition-colors shadow-sm active:scale-[0.98] cursor-pointer"
+            className="w-full bg-primary-container text-on-primary rounded-lg py-3 font-label-md text-label-md hover:bg-[#4338CA] transition-colors shadow-sm active:scale-[0.98] cursor-pointer disabled:opacity-50"
             type="submit"
+            disabled={isSubmitting}
           >
-            Sign in
+            {isSubmitting ? 'Signing in...' : 'Sign in'}
           </button>
         </form>
 

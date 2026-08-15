@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
@@ -59,7 +59,7 @@ export default function InterviewEvaluationPage() {
 
     const fetchResults = async () => {
       try {
-        const token = 'mock_user_token';
+        const token = localStorage.getItem('token');
         const res = await fetch(`http://localhost:8000/api/v1/interviews/${sessionId}/results`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -85,7 +85,7 @@ export default function InterviewEvaluationPage() {
       return;
     }
     try {
-      const token = 'mock_user_token';
+      const token = localStorage.getItem('token');
       const res = await fetch(`http://localhost:8000/api/v1/interviews/${sessionId}/practice-again`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }

@@ -18,6 +18,7 @@ from app.api.routes import (
     interviews,
     resume_ai,
     latex,
+    jobs,
 )
 
 api_router = APIRouter()
@@ -34,3 +35,4 @@ api_router.include_router(export.router,     prefix="/resumes",    tags=["Export
 api_router.include_router(interviews.router, prefix="/interviews", tags=["Interviews"])
 api_router.include_router(resume_ai.router,  prefix="/resume/ai",  tags=["Resume AI Studio"])
 api_router.include_router(latex.router,      prefix="/latex",      tags=["LaTeX Resume Editor"])
+api_router.include_router(jobs.router,       prefix="/jobs",       tags=["Job Search Engine"])

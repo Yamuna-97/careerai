@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
@@ -208,7 +208,7 @@ Senior Product Designer with 6+ years of experience transforming complex problem
   // Save Project to Database
   const handleSaveProject = async () => {
     try {
-      const token = "mock_user_token";
+      const token = localStorage.getItem('token');
       
       if (projectId) {
         // Update existing project files
@@ -250,7 +250,7 @@ Senior Product Designer with 6+ years of experience transforming complex problem
   // Fetch Saved Projects List
   const fetchProjects = async () => {
     try {
-      const token = "mock_user_token";
+      const token = localStorage.getItem('token');
       const res = await fetch("http://localhost:8000/api/v1/latex/projects", {
         headers: { "Authorization": `Bearer ${token}` }
       });
@@ -266,7 +266,7 @@ Senior Product Designer with 6+ years of experience transforming complex problem
   // Load a Saved Project
   const handleLoadProject = async (id) => {
     try {
-      const token = "mock_user_token";
+      const token = localStorage.getItem('token');
       const res = await fetch(`http://localhost:8000/api/v1/latex/projects/${id}`, {
         headers: { "Authorization": `Bearer ${token}` }
       });
@@ -294,7 +294,7 @@ Senior Product Designer with 6+ years of experience transforming complex problem
     }
 
     try {
-      const token = "mock_user_token";
+      const token = localStorage.getItem('token');
       const res = await fetch("http://localhost:8000/api/v1/latex/generate", {
         method: "POST",
         headers: {
@@ -325,7 +325,7 @@ Senior Product Designer with 6+ years of experience transforming complex problem
     if (!window.confirm("This will overwrite your Manual Builder resume data. Proceed?")) return;
     
     try {
-      const token = "mock_user_token";
+      const token = localStorage.getItem('token');
       const res = await fetch("http://localhost:8000/api/v1/latex/import", {
         method: "POST",
         headers: {
@@ -358,7 +358,7 @@ Senior Product Designer with 6+ years of experience transforming complex problem
     setIsAiLoading(true);
 
     try {
-      const token = "mock_user_token";
+      const token = localStorage.getItem('token');
       const res = await fetch("http://localhost:8000/api/v1/latex/ai/edit", {
         method: "POST",
         headers: {
@@ -397,7 +397,7 @@ Senior Product Designer with 6+ years of experience transforming complex problem
 
     const firstErr = errors[0];
     try {
-      const token = "mock_user_token";
+      const token = localStorage.getItem('token');
       const res = await fetch("http://localhost:8000/api/v1/latex/ai/fix", {
         method: "POST",
         headers: {

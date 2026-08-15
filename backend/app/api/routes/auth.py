@@ -36,21 +36,28 @@ def sync_user(
 
     The user_id in the JWT must match the id in the request body.
     """
-    # Security: ensure the token matches the requested user ID
-    if current_user_id != user_data.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Token user ID does not match request user ID.",
-        )
+    # Always trust the decoded user_id from the verified JWT token
+    user_id = current_user_id
 
-    # Check if user already exists
-    existing_user = db.query(User).filter(User.id == user_data.id).first()
+    # UPSERT: update if exists, create if new — never duplicate
+    existing_user = db.query(User).filter(User.id == user_id).first()
     if existing_user:
+        # Update name/email in case they changed
+        updated = False
+        if user_data.email and existing_user.email != user_data.email:
+            existing_user.email = user_data.email
+            updated = True
+        if user_data.full_name and existing_user.full_name != user_data.full_name:
+            existing_user.full_name = user_data.full_name
+            updated = True
+        if updated:
+            db.commit()
+            db.refresh(existing_user)
         return existing_user
 
-    # Create new user profile
+    # Create new user profile with data from the JWT / signup form
     new_user = User(
-        id=user_data.id,
+        id=user_id,
         email=user_data.email,
         full_name=user_data.full_name,
     )

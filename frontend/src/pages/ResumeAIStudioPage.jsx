@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
@@ -97,7 +97,7 @@ export default function ResumeAIStudioPage() {
         return;
       }
 
-      const token = 'mock_user_token';
+      const token = localStorage.getItem('token');
       let res;
       
       if (inputMethod === 'upload' && uploadedFile) {
@@ -156,7 +156,7 @@ export default function ResumeAIStudioPage() {
     setViewState('GENERATING');
     
     try {
-      const token = 'mock_user_token';
+      const token = localStorage.getItem('token');
       const res = await fetch('http://localhost:8000/api/v1/resume/ai/generate', {
         method: 'POST',
         headers: {
@@ -196,7 +196,7 @@ export default function ResumeAIStudioPage() {
     setIsSendingMessage(true);
 
     try {
-      const token = 'mock_user_token';
+      const token = localStorage.getItem('token');
       const res = await fetch('http://localhost:8000/api/v1/resume/ai/chat', {
         method: 'POST',
         headers: {

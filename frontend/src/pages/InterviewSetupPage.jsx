@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
@@ -55,7 +55,7 @@ export default function InterviewSetupPage() {
   const handleStart = async () => {
     setSubmitting(true);
     try {
-      const token = 'mock_user_token';
+      const token = localStorage.getItem('token');
       const finalRole = role === 'Custom Role' ? customRole : role;
       
       const payload = {

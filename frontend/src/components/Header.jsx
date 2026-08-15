@@ -1,7 +1,57 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 
 export default function Header({ title = 'Dashboard', subtitle }) {
+  const [profile, setProfile] = useState(null);
+  const [roleTitle, setRoleTitle] = useState('Career Profile');
+
+  useEffect(() => {
+    async function loadUserProfile() {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        // Fetch user from /api/v1/users/me
+        const userRes = await fetch("http://localhost:8000/api/v1/users/me", {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (userRes.ok) {
+          const userData = await userRes.json();
+          setProfile(userData);
+        }
+
+        // Fetch target title from /api/v1/jobs/profile
+        const jobRes = await fetch("http://localhost:8000/api/v1/jobs/profile", {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (jobRes.ok) {
+          const jobData = await jobRes.json();
+          if (jobData.profile_exists && jobData.profile?.current_title) {
+            setRoleTitle(jobData.profile.current_title);
+          } else if (jobData.extracted_draft?.current_title) {
+            setRoleTitle(jobData.extracted_draft.current_title);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load user profile in header:", err);
+      }
+    }
+
+    loadUserProfile();
+  }, []);
+
+  const getInitials = (fullName) => {
+    if (!fullName) return '';
+    const parts = fullName.trim().split(/\s+/);
+    if (parts.length === 1) {
+      return parts[0][0].toUpperCase();
+    }
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  };
+
+  const initials = profile ? getInitials(profile.full_name) : '';
+  const displayName = profile ? profile.full_name : '';
+
   return (
     <header className="bg-surface/80 backdrop-blur-md sticky top-0 right-0 left-0 z-40 flex justify-between items-center px-margin-mobile md:px-margin-desktop h-16 border-b border-outline-variant">
       <div>
@@ -30,13 +80,29 @@ export default function Header({ title = 'Dashboard', subtitle }) {
 
         {/* User avatar */}
         <div className="flex items-center gap-2 pl-2 border-l border-outline-variant">
-          <div className="w-8 h-8 rounded-full bg-primary text-on-primary flex items-center justify-center font-bold text-sm">
-            JD
-          </div>
-          <div className="hidden lg:block text-left">
-            <p className="font-label-sm text-label-sm font-semibold text-on-surface leading-tight">Jane Doe</p>
-            <p className="text-[11px] text-on-surface-variant">Senior Engineer</p>
-          </div>
+          {profile ? (
+            <>
+              <div className="w-8 h-8 rounded-full bg-primary text-on-primary flex items-center justify-center font-bold text-sm">
+                {initials}
+              </div>
+              <div className="hidden lg:block text-left">
+                <p className="font-label-sm text-label-sm font-semibold text-on-surface leading-tight">
+                  {displayName}
+                </p>
+                <p className="text-[11px] text-on-surface-variant">
+                  {roleTitle}
+                </p>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="w-8 h-8 rounded-full bg-primary/20 animate-pulse"></div>
+              <div className="hidden lg:block text-left space-y-1">
+                <div className="w-20 h-3 bg-outline-variant/30 animate-pulse rounded"></div>
+                <div className="w-16 h-2 bg-outline-variant/30 animate-pulse rounded"></div>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </header>

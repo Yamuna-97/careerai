@@ -35,3 +35,6 @@ Thumbs.db
 # OS
 *.swp
 *.swo
+
+# Antigravity agent configurations
+.agents/

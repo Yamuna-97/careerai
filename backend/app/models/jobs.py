@@ -9,7 +9,7 @@ SQLAlchemy models for the Intelligent Job Search feature.
 """
 
 from datetime import datetime
-from sqlalchemy import Column, String, Text, DateTime, Float, Integer, Boolean, JSON
+from sqlalchemy import Column, String, Text, DateTime, Float, Integer, Boolean, JSON, ForeignKey
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -47,7 +47,7 @@ class JobSearchProfile(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
-    saved_jobs = relationship("SavedJob", back_populates="profile", cascade="all, delete-orphan")
+    saved_jobs = relationship("SavedJob", back_populates="profile", cascade="all, delete-orphan", primaryjoin="JobSearchProfile.id == SavedJob.profile_id")
 
 
 class SavedJob(Base):
@@ -59,7 +59,7 @@ class SavedJob(Base):
 
     id = Column(String, primary_key=True, index=True)
     user_id = Column(String, index=True, nullable=False)
-    profile_id = Column(String, nullable=True)
+    profile_id = Column(String, ForeignKey("job_search_profiles.id", ondelete="SET NULL"), nullable=True)
 
     # External job data (normalized from Adzuna)
     external_job_id = Column(String, index=True)     # Adzuna's redirect_url hash
@@ -85,8 +85,7 @@ class SavedJob(Base):
 
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    profile = relationship("JobSearchProfile", back_populates="saved_jobs", foreign_keys=[profile_id],
-                           primaryjoin="SavedJob.profile_id == JobSearchProfile.id")
+    profile = relationship("JobSearchProfile", back_populates="saved_jobs", foreign_keys=[profile_id])
     application = relationship("JobApplication", back_populates="saved_job",
                                uselist=False, cascade="all, delete-orphan")
 
@@ -100,7 +99,7 @@ class JobApplication(Base):
 
     id = Column(String, primary_key=True, index=True)
     user_id = Column(String, index=True, nullable=False)
-    saved_job_id = Column(String, nullable=False, index=True)
+    saved_job_id = Column(String, ForeignKey("saved_jobs.id", ondelete="CASCADE"), nullable=False, index=True)
 
     status = Column(String, default="saved")  # saved|applied|interview|offer|rejected
     notes = Column(Text, default="")
@@ -109,8 +108,7 @@ class JobApplication(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     saved_job = relationship("SavedJob", back_populates="application",
-                             foreign_keys=[saved_job_id],
-                             primaryjoin="JobApplication.saved_job_id == SavedJob.id")
+                             foreign_keys=[saved_job_id])
 
 
 class JobSearchHistory(Base):

@@ -526,3 +526,86 @@ def extract_text_from_docx(file_bytes: bytes) -> str:
         raise ValueError("python-docx is not installed. Run: pip install python-docx")
     except Exception as e:
         raise ValueError(f"Failed to extract DOCX text: {str(e)}")
+
+
+# ── 13. Extract Job Search Profile from Resume ───────────────────────────────
+def extract_job_search_profile(resume_data: dict) -> dict:
+    """
+    Analyze structured resume data and extract initial job search preferences to seed a JobSearchProfile.
+    """
+    if settings.GEMINI_API_KEY and settings.AI_PROVIDER != "none":
+        try:
+            prompt = f"""
+You are an expert career consultant. Analyze the following resume data and extract initial job search settings.
+
+Resume Data:
+{json.dumps(resume_data, indent=2)}
+
+Based on this resume, infer:
+1. Target Roles (e.g. ['Software Engineer', 'Frontend Developer'] - list 1 to 3 roles, matching their experience and title)
+2. Top 8-10 Skills (e.g. ['React', 'JavaScript', 'TailwindCSS'])
+3. Relevant search keywords (e.g. ['SaaS', 'design systems', 'FastAPI'])
+4. Experience Level: one of "entry", "junior", "mid", "senior", or "any"
+5. Current Title: their most recent professional title, or empty string if none
+6. Education Level: their highest degree obtained, or empty string
+7. Locations: list of cities or "Remote" (infer from location in resume, default to ["Remote"] if none)
+8. Preferred Work Modes: list containing "remote", "hybrid", and/or "onsite" (default to ["remote", "hybrid", "onsite"])
+9. Employment Types: list containing "full_time", "part_time", "internship", and/or "contract" (default to ["full_time"])
+10. Country Code: "in" for India, "us" for USA, "gb" for UK, "ca" for Canada, "au" for Australia, or "in" by default.
+
+Return ONLY a valid JSON object matching this exact schema:
+{{
+  "target_roles": ["string"],
+  "skills": ["string"],
+  "keywords": ["string"],
+  "experience_level": "entry|junior|mid|senior|any",
+  "current_title": "string",
+  "education_level": "string",
+  "locations": ["string"],
+  "work_modes": ["remote"|"hybrid"|"onsite"],
+  "employment_types": ["full_time"|"part_time"|"internship"|"contract"],
+  "country_code": "in|us|gb|ca|au"
+}}
+"""
+            raw = _call_gemini(prompt, json_mode=True)
+            return _parse_json(raw)
+        except Exception as e:
+            # Fall back to heuristic extraction on failure
+            print(f"[!] Error in Gemini extract_job_search_profile: {e}")
+            pass
+
+    # Heuristic fallback parsing logic
+    personal = resume_data.get("personal", {})
+    title = personal.get("title", "") or ""
+    
+    # Extract skills
+    skills_list = [s.get("name") for s in resume_data.get("skills", []) if s.get("name")]
+    
+    # Target roles
+    target_roles = [title] if title else ["Software Engineer"]
+    
+    # Locations
+    loc = personal.get("location", "")
+    locations = [loc] if loc else ["Remote"]
+    
+    # Highest Education Level
+    edu_list = resume_data.get("education", [])
+    highest_edu = ""
+    if edu_list:
+        highest_edu = edu_list[0].get("degree", "")
+        if edu_list[0].get("fieldOfStudy"):
+            highest_edu += f" in {edu_list[0].get('fieldOfStudy')}"
+
+    return {
+        "target_roles": target_roles,
+        "skills": skills_list[:8],
+        "keywords": skills_list[:5],
+        "experience_level": "any",
+        "current_title": title,
+        "education_level": highest_edu,
+        "locations": locations,
+        "work_modes": ["remote", "hybrid", "onsite"],
+        "employment_types": ["full_time"],
+        "country_code": "in"
+    }
+

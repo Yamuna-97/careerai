@@ -4,7 +4,7 @@ import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 
 /* ─── AI Chat Panel ─────────────────────────────────────────────────── */
-function AIChatPanel({ onClose }) {
+function AIChatPanel({ onClose, userName = 'User' }) {
   const prompts = [
     'Improve my resume',
     'What skills should I learn?',
@@ -13,7 +13,7 @@ function AIChatPanel({ onClose }) {
     'Why is my job match score low?',
   ];
   const [messages, setMessages] = useState([
-    { role: 'ai', text: "Hi Yamuna! I'm your AI Career Assistant. How can I help you today?" },
+    { role: 'ai', text: `Hi ${userName}! I'm your AI Career Assistant. How can I help you today?` },
   ]);
   const [input, setInput] = useState('');
 
@@ -95,6 +95,71 @@ function AIChatPanel({ onClose }) {
 export default function DashboardPage() {
   const navigate = useNavigate();
   const [chatOpen, setChatOpen] = useState(false);
+  const [profile, setProfile] = useState(null);
+  const [jobProfile, setJobProfile] = useState(null);
+  const [latestResumeStats, setLatestResumeStats] = useState(null);
+  const [interviewReadiness, setInterviewReadiness] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  React.useEffect(() => {
+    async function loadDashboardData() {
+      setIsLoading(true);
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+          setIsLoading(false);
+          return;
+        }
+
+        const headers = { 'Authorization': `Bearer ${token}` };
+
+        // 1. Fetch User Profile
+        const userRes = await fetch("http://localhost:8000/api/v1/users/me", { headers });
+        if (userRes.ok) {
+          const userData = await userRes.json();
+          setProfile(userData);
+        }
+
+        // 2. Fetch Job Profile
+        const jobRes = await fetch("http://localhost:8000/api/v1/jobs/profile", { headers });
+        if (jobRes.ok) {
+          const jobData = await jobRes.json();
+          setJobProfile(jobData);
+        }
+
+        // 3. Fetch Resumes & Stats
+        const resumesRes = await fetch("http://localhost:8000/api/v1/resumes", { headers });
+        if (resumesRes.ok) {
+          const resumes = await resumesRes.json();
+          if (resumes && resumes.length > 0) {
+            // Sort by updated_at descending to get the latest
+            resumes.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+            const latestResume = resumes[0];
+            
+            const statsRes = await fetch(`http://localhost:8000/api/v1/resumes/${latestResume.id}/stats`, { headers });
+            if (statsRes.ok) {
+              const statsData = await statsRes.json();
+              setLatestResumeStats(statsData);
+            }
+          }
+        }
+
+        // 4. Fetch Interview Readiness
+        const readinessRes = await fetch("http://localhost:8000/api/v1/interviews/readiness", { headers });
+        if (readinessRes.ok) {
+          const readinessData = await readinessRes.json();
+          setInterviewReadiness(readinessData);
+        }
+
+      } catch (err) {
+        console.error("Error loading dashboard data:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    loadDashboardData();
+  }, []);
 
   const recommendedJobs = [
     {
@@ -126,7 +191,10 @@ export default function DashboardPage() {
     },
   ];
 
-  const currentSkills = ['Python', 'SQL', 'Machine Learning', 'Pandas', 'FastAPI'];
+  const currentSkills = jobProfile?.profile?.skills?.length > 0 
+    ? jobProfile.profile.skills 
+    : ['Python', 'SQL', 'Machine Learning', 'Pandas', 'FastAPI'];
+
   const recommendedSkills = ['TensorFlow', 'AWS', 'Docker', 'Deep Learning'];
 
   const activityItems = [
@@ -135,6 +203,12 @@ export default function DashboardPage() {
     { icon: 'work', label: 'New Job Match', detail: '3 new jobs match your profile', time: 'Yesterday', color: '' },
     { icon: 'tips_and_updates', label: 'Skill Recommendation', detail: 'AI recommends learning Docker', time: '2 days ago', isLast: true, color: 'text-primary' },
   ];
+
+  const resumeScore = latestResumeStats ? latestResumeStats.completion_percentage : 0;
+  const resumeOffset = 251.2 - (251.2 * resumeScore) / 100;
+
+  const interviewScore = interviewReadiness ? interviewReadiness.readiness_score : 0;
+  const interviewOffset = 251.2 - (251.2 * interviewScore) / 100;
 
   return (
     <div className="bg-background text-on-background font-body-md antialiased min-h-screen flex">
@@ -156,12 +230,21 @@ export default function DashboardPage() {
 
               {/* 1. Welcome Section */}
               <div className="stagger-1">
-                <h2 className="font-display-lg text-display-lg font-extrabold text-on-background tracking-tight mb-2">
-                  Welcome back, Yamuna 👋
-                </h2>
-                <p className="font-body-lg text-body-lg text-on-surface-variant mb-4">
-                  Track your career progress, improve your skills, and discover opportunities matched to your profile.
-                </p>
+                {isLoading ? (
+                  <div className="space-y-2 mb-4">
+                    <div className="w-64 h-8 bg-outline-variant/20 animate-pulse rounded"></div>
+                    <div className="w-96 h-4 bg-outline-variant/20 animate-pulse rounded"></div>
+                  </div>
+                ) : (
+                  <>
+                    <h2 className="font-display-lg text-display-lg font-extrabold text-on-background tracking-tight mb-2">
+                      Welcome back, {profile?.full_name || 'User'} 👋
+                    </h2>
+                    <p className="font-body-lg text-body-lg text-on-surface-variant mb-4">
+                      Track your career progress, improve your skills, and discover opportunities matched to your profile.
+                    </p>
+                  </>
+                )}
                 <div className="flex flex-wrap gap-3">
                   <Link
                     to="/resume-editor"
@@ -198,17 +281,36 @@ export default function DashboardPage() {
                     <div className="w-12 h-12 rounded-full bg-surface-container-high flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-on-primary transition-colors">
                       <span className="material-symbols-outlined icon-filled">description</span>
                     </div>
-                    <div>
-                      <p className="font-label-sm text-label-sm text-primary uppercase tracking-wider mb-1 font-semibold">
-                        Continue where you left off
-                      </p>
-                      <h3 className="font-headline-sm text-headline-sm font-bold text-on-background">
-                        Machine Learning Engineer Resume
-                      </h3>
-                      <p className="font-body-sm text-body-sm text-on-surface-variant mt-1">
-                        Last edited 2 hours ago • Added Python and TensorFlow
-                      </p>
-                    </div>
+                    {isLoading ? (
+                      <div className="space-y-1">
+                        <div className="w-24 h-3 bg-outline-variant/20 animate-pulse rounded"></div>
+                        <div className="w-48 h-4 bg-outline-variant/20 animate-pulse rounded"></div>
+                      </div>
+                    ) : latestResumeStats ? (
+                      <div>
+                        <p className="font-label-sm text-label-sm text-primary uppercase tracking-wider mb-1 font-semibold">
+                          Continue where you left off
+                        </p>
+                        <h3 className="font-headline-sm text-headline-sm font-bold text-on-background">
+                          {latestResumeStats.title}
+                        </h3>
+                        <p className="font-body-sm text-body-sm text-on-surface-variant mt-1">
+                          Last edited {new Date(latestResumeStats.updated_at).toLocaleDateString()} • {latestResumeStats.completion_percentage}% complete
+                        </p>
+                      </div>
+                    ) : (
+                      <div>
+                        <p className="font-label-sm text-label-sm text-primary uppercase tracking-wider mb-1 font-semibold">
+                          Get Started
+                        </p>
+                        <h3 className="font-headline-sm text-headline-sm font-bold text-on-background">
+                          Create your first resume
+                        </h3>
+                        <p className="font-body-sm text-body-sm text-on-surface-variant mt-1">
+                          Build a professional, AI-powered resume in minutes.
+                        </p>
+                      </div>
+                    )}
                   </div>
                   <Link
                     to="/resume-editor"
@@ -228,22 +330,22 @@ export default function DashboardPage() {
                   Readiness Scores
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-stack-md">
-                  {/* Resume Strength 85% */}
+                  {/* Resume Strength */}
                   <div className="flex flex-col items-center justify-center p-stack-md bg-surface-container-lowest rounded-lg border border-outline-variant/50 hover:bg-surface-container-low hover:border-primary transition-all group">
                     <div className="relative w-24 h-24 mb-3">
                       <svg className="w-full h-full" viewBox="0 0 100 100">
                         <circle className="text-surface-container-high stroke-current" cx="50" cy="50" fill="transparent" r="40" strokeWidth="8"></circle>
-                        <circle className="text-primary stroke-current progress-ring__circle" cx="50" cy="50" fill="transparent" r="40" strokeDasharray="251.2" strokeDashoffset="37.68" strokeLinecap="round" strokeWidth="8"></circle>
+                        <circle className="text-primary stroke-current progress-ring__circle" cx="50" cy="50" fill="transparent" r="40" strokeDasharray="251.2" strokeDashoffset={resumeOffset} strokeLinecap="round" strokeWidth="8"></circle>
                       </svg>
                       <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="font-headline-md text-headline-md font-bold text-primary">85%</span>
+                        <span className="font-headline-md text-headline-md font-bold text-primary">{resumeScore}%</span>
                       </div>
                     </div>
                     <p className="font-label-md text-label-md text-on-surface text-center group-hover:text-primary transition-colors font-semibold">
                       Resume<br />Strength
                     </p>
                     <p className="font-body-sm text-body-sm text-on-surface-variant text-center mt-1 text-[11px]">
-                      Your resume is 85% complete and optimized.
+                      Your resume is {resumeScore}% complete and optimized.
                     </p>
                     <Link
                       to="/resume-editor"
@@ -253,22 +355,22 @@ export default function DashboardPage() {
                     </Link>
                   </div>
 
-                  {/* Interview Readiness 72% */}
+                  {/* Interview Readiness */}
                   <div className="flex flex-col items-center justify-center p-stack-md bg-surface-container-lowest rounded-lg border border-outline-variant/50 hover:bg-surface-container-low hover:border-secondary transition-all group">
                     <div className="relative w-24 h-24 mb-3">
                       <svg className="w-full h-full" viewBox="0 0 100 100">
                         <circle className="text-surface-container-high stroke-current" cx="50" cy="50" fill="transparent" r="40" strokeWidth="8"></circle>
-                        <circle className="text-secondary stroke-current progress-ring__circle" cx="50" cy="50" fill="transparent" r="40" strokeDasharray="251.2" strokeDashoffset="70.33" strokeLinecap="round" strokeWidth="8"></circle>
+                        <circle className="text-secondary stroke-current progress-ring__circle" cx="50" cy="50" fill="transparent" r="40" strokeDasharray="251.2" strokeDashoffset={interviewOffset} strokeLinecap="round" strokeWidth="8"></circle>
                       </svg>
                       <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="font-headline-md text-headline-md font-bold text-secondary">72%</span>
+                        <span className="font-headline-md text-headline-md font-bold text-secondary">{interviewScore}%</span>
                       </div>
                     </div>
                     <p className="font-label-md text-label-md text-on-surface text-center group-hover:text-secondary transition-colors font-semibold">
                       Interview<br />Readiness
                     </p>
                     <p className="font-body-sm text-body-sm text-on-surface-variant text-center mt-1 text-[11px]">
-                      Based on your recent AI interview practice.
+                      Based on your recent AI mock interview practice.
                     </p>
                     <Link
                       to="/interview-session"
@@ -493,57 +595,74 @@ export default function DashboardPage() {
                   <span className="material-symbols-outlined text-outline">mic</span>
                   Recent Interview Performance
                 </h3>
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-                  {/* Overall Score Ring */}
-                  <div className="md:col-span-4 flex flex-col items-center justify-center bg-surface-container-lowest rounded-lg border border-outline-variant/50 p-4">
-                    <div className="relative w-28 h-28 mb-2">
-                      <svg className="w-full h-full" viewBox="0 0 100 100">
-                        <circle className="text-surface-container-high stroke-current" cx="50" cy="50" fill="transparent" r="40" strokeWidth="8"></circle>
-                        <circle className="text-secondary stroke-current progress-ring__circle" cx="50" cy="50" fill="transparent" r="40" strokeDasharray="251.2" strokeDashoffset="45.21" strokeLinecap="round" strokeWidth="8"></circle>
-                      </svg>
-                      <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <span className="font-headline-md text-headline-md font-bold text-secondary">82%</span>
-                        <span className="font-label-sm text-[10px] text-on-surface-variant">Overall</span>
+                {isLoading ? (
+                  <div className="w-full h-32 bg-outline-variant/10 animate-pulse rounded-lg"></div>
+                ) : interviewReadiness && interviewReadiness.completed_count > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                    {/* Overall Score Ring */}
+                    <div className="md:col-span-4 flex flex-col items-center justify-center bg-surface-container-lowest rounded-lg border border-outline-variant/50 p-4">
+                      <div className="relative w-28 h-28 mb-2">
+                        <svg className="w-full h-full" viewBox="0 0 100 100">
+                          <circle className="text-surface-container-high stroke-current" cx="50" cy="50" fill="transparent" r="40" strokeWidth="8"></circle>
+                          <circle className="text-secondary stroke-current progress-ring__circle" cx="50" cy="50" fill="transparent" r="40" strokeDasharray="251.2" strokeDashoffset={251.2 - (251.2 * interviewReadiness.average_score) / 100} strokeLinecap="round" strokeWidth="8"></circle>
+                        </svg>
+                        <div className="absolute inset-0 flex flex-col items-center justify-center">
+                          <span className="font-headline-md text-headline-md font-bold text-secondary">{interviewReadiness.average_score}%</span>
+                          <span className="font-label-sm text-[10px] text-on-surface-variant">Average</span>
+                        </div>
                       </div>
+                      <p className="font-label-md text-label-md font-bold text-on-surface text-center">Overall Score</p>
                     </div>
-                    <p className="font-label-md text-label-md font-bold text-on-surface text-center">Overall Score</p>
-                  </div>
 
-                  {/* Breakdown bars */}
-                  <div className="md:col-span-5 flex flex-col justify-center gap-3">
-                    {[
-                      { label: 'Technical', score: 85, color: 'bg-primary' },
-                      { label: 'Communication', score: 78, color: 'bg-secondary' },
-                      { label: 'Relevance', score: 84, color: 'bg-tertiary-container' },
-                    ].map((dim) => (
-                      <div key={dim.label}>
-                        <div className="flex justify-between mb-1">
-                          <span className="font-body-sm text-body-sm text-on-surface-variant">{dim.label}</span>
-                          <span className="font-label-sm text-label-sm font-bold text-on-surface">{dim.score}%</span>
+                    {/* Breakdown bars */}
+                    <div className="md:col-span-5 flex flex-col justify-center gap-3">
+                      {[
+                        { label: 'Technical Accuracy', score: interviewReadiness.technical, color: 'bg-primary' },
+                        { label: 'Communication Style', score: interviewReadiness.communication, color: 'bg-secondary' },
+                        { label: 'Confidence & Delivery', score: interviewReadiness.confidence, color: 'bg-tertiary-container' },
+                      ].map((dim) => (
+                        <div key={dim.label}>
+                          <div className="flex justify-between mb-1">
+                            <span className="font-body-sm text-body-sm text-on-surface-variant">{dim.label}</span>
+                            <span className="font-label-sm text-label-sm font-bold text-on-surface">{dim.score}%</span>
+                          </div>
+                          <div className="w-full h-1.5 bg-surface-container rounded-full overflow-hidden">
+                            <div className={`h-full ${dim.color} rounded-full`} style={{ width: `${dim.score}%` }}></div>
+                          </div>
                         </div>
-                        <div className="w-full h-1.5 bg-surface-container rounded-full overflow-hidden">
-                          <div className={`h-full ${dim.color} rounded-full`} style={{ width: `${dim.score}%` }}></div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
 
-                  {/* Actions */}
-                  <div className="md:col-span-3 flex flex-col justify-center gap-2">
-                    <Link
-                      to="/interview-evaluation"
-                      className="w-full text-center px-3 py-2 rounded-lg border border-outline-variant text-on-surface-variant hover:bg-surface-container transition-colors font-label-sm text-label-sm cursor-pointer"
-                    >
-                      View Results
-                    </Link>
+                    {/* Actions */}
+                    <div className="md:col-span-3 flex flex-col justify-center gap-2">
+                      <Link
+                        to="/interview-evaluation"
+                        className="w-full text-center px-3 py-2 rounded-lg border border-outline-variant text-on-surface-variant hover:bg-surface-container transition-colors font-label-sm text-label-sm cursor-pointer"
+                      >
+                        View Results
+                      </Link>
+                      <Link
+                        to="/interview-session"
+                        className="w-full text-center px-3 py-2 rounded-lg bg-primary text-on-primary hover:bg-[#4338CA] transition-colors font-label-sm text-label-sm cursor-pointer"
+                      >
+                        Practice Again
+                      </Link>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-6">
+                    <p className="font-body-md text-body-md text-on-surface-variant mb-4">
+                      You haven't completed any AI mock interviews yet.
+                    </p>
                     <Link
                       to="/interview-session"
-                      className="w-full text-center px-3 py-2 rounded-lg bg-primary text-on-primary hover:bg-[#4338CA] transition-colors font-label-sm text-label-sm cursor-pointer"
+                      className="bg-primary hover:bg-[#4338CA] text-on-primary px-5 py-2.5 rounded-lg font-label-md text-label-md transition-colors shadow-sm inline-flex items-center gap-2"
                     >
-                      Practice Again
+                      <span className="material-symbols-outlined text-[18px]">mic</span>
+                      Start Mock Interview
                     </Link>
                   </div>
-                </div>
+                )}
               </div>
 
             </div>

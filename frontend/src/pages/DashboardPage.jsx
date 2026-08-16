@@ -100,6 +100,37 @@ export default function DashboardPage() {
   const [latestResumeStats, setLatestResumeStats] = useState(null);
   const [interviewReadiness, setInterviewReadiness] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [topJobs, setTopJobs] = useState([]);
+  const [topJobsPeriod, setTopJobsPeriod] = useState('');
+  const [topJobsLoading, setTopJobsLoading] = useState(true);
+  const [topJobsError, setTopJobsError] = useState(null);
+
+  useEffect(() => {
+    async function fetchTopJobs() {
+      setTopJobsLoading(true);
+      setTopJobsError(null);
+      try {
+        const token = await getAuthToken();
+        if (!token) {
+          setTopJobsLoading(false);
+          return;
+        }
+        const res = await apiClient.get('/jobs/top-five');
+        if (res.data && res.data.success) {
+          setTopJobs(res.data.jobs || []);
+          setTopJobsPeriod(res.data.period || '');
+        } else {
+          setTopJobsError(res.data?.error_message || 'Failed to load top jobs.');
+        }
+      } catch (err) {
+        console.error('Error fetching top jobs:', err);
+        setTopJobsError('Could not retrieve top jobs. Please check your connection.');
+      } finally {
+        setTopJobsLoading(false);
+      }
+    }
+    fetchTopJobs();
+  }, [jobProfile]);
 
   React.useEffect(() => {
     async function loadDashboardData() {
@@ -146,35 +177,7 @@ export default function DashboardPage() {
     loadDashboardData();
   }, []);
 
-  const recommendedJobs = [
-    {
-      title: 'Machine Learning Intern',
-      company: 'TechVision AI',
-      location: 'Chennai, India',
-      skills: ['Python', 'Machine Learning', 'SQL', 'TensorFlow'],
-      match: 94,
-      matchColor: 'text-tertiary',
-      matchBg: 'bg-tertiary-container/10',
-    },
-    {
-      title: 'Data Science Intern',
-      company: 'AI Solutions',
-      location: 'Bangalore, India',
-      skills: ['Python', 'Pandas', 'SQL', 'Machine Learning'],
-      match: 89,
-      matchColor: 'text-primary',
-      matchBg: 'bg-primary/10',
-    },
-    {
-      title: 'AI Engineer Intern',
-      company: 'TechLabs',
-      location: 'Hyderabad, India',
-      skills: ['Python', 'Deep Learning', 'FastAPI'],
-      match: 86,
-      matchColor: 'text-secondary',
-      matchBg: 'bg-secondary/10',
-    },
-  ];
+
 
   const currentSkills = jobProfile?.profile?.skills?.length > 0
     ? jobProfile.profile.skills
@@ -445,71 +448,194 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {/* 5. Recommended Jobs */}
+              {/* 5. Top 5 Jobs */}
               <div className="stagger-3 bg-surface rounded-xl p-stack-lg border border-outline-variant shadow-md">
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-2">
                   <div>
                     <h3 className="font-headline-sm text-headline-sm font-bold text-on-background flex items-center gap-2">
                       <span className="material-symbols-outlined text-outline">work</span>
-                      Recommended Jobs
+                      Top 5 Jobs
                     </h3>
                     <p className="font-body-sm text-body-sm text-on-surface-variant mt-0.5">
-                      Opportunities matched to your skills and career goals.
+                      Top job opportunities from the previous month, selected based on your profile and career match.
                     </p>
+                    {topJobsPeriod && (
+                      <span className="inline-block mt-2 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-primary/10 text-primary border border-primary/20">
+                        {topJobsPeriod}
+                      </span>
+                    )}
                   </div>
                   <Link
                     to="/jobs"
-                    className="text-primary font-label-sm text-label-sm font-semibold hover:underline flex items-center gap-1 whitespace-nowrap"
+                    className="text-primary font-label-sm text-label-sm font-semibold hover:underline flex items-center gap-1 whitespace-nowrap self-start sm:self-auto"
                   >
                     View All Jobs <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
                   </Link>
                 </div>
-                <div className="flex flex-col gap-3">
-                  {recommendedJobs.map((job, i) => (
-                    <div
-                      key={i}
-                      className="bg-surface-container-lowest border border-outline-variant/50 rounded-lg p-4 hover:bg-surface-container-low hover:border-primary/30 transition-all group"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex gap-3 items-start">
-                          <div className="w-10 h-10 rounded-lg bg-surface-container-high border border-outline-variant flex items-center justify-center shrink-0 font-bold text-primary text-base">
-                            {job.company.charAt(0)}
-                          </div>
-                          <div>
-                            <p className="font-label-md text-label-md font-bold text-on-background">{job.title}</p>
-                            <p className="font-body-sm text-body-sm text-on-surface-variant">
-                              {job.company} • {job.location}
-                            </p>
-                            <div className="flex flex-wrap gap-1.5 mt-2">
-                              {job.skills.map((s) => (
-                                <span key={s} className="text-[11px] px-2 py-0.5 rounded bg-surface-container text-on-surface-variant border border-outline-variant/40 font-label-sm">
-                                  {s}
-                                </span>
-                              ))}
+
+                {/* Loading skeleton */}
+                {topJobsLoading && (
+                  <div className="flex flex-col gap-3">
+                    {[1, 2, 3].map((n) => (
+                      <div key={n} className="bg-surface-container-lowest border border-outline-variant/50 rounded-lg p-4 animate-pulse">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex gap-3 items-start w-full">
+                            <div className="w-10 h-10 rounded-lg bg-outline-variant/20 shrink-0"></div>
+                            <div className="space-y-2 w-2/3">
+                              <div className="h-4 bg-outline-variant/20 rounded w-3/4"></div>
+                              <div className="h-3 bg-outline-variant/20 rounded w-1/2"></div>
+                              <div className="h-3 bg-outline-variant/20 rounded w-1/3"></div>
                             </div>
                           </div>
-                        </div>
-                        <div className={`shrink-0 text-right`}>
-                          <span className={`font-headline-sm text-headline-sm font-extrabold ${job.matchColor}`}>
-                            {job.match}%
-                          </span>
-                          <p className="font-label-sm text-[10px] text-on-surface-variant">Match</p>
+                          <div className="w-12 h-12 bg-outline-variant/20 rounded shrink-0"></div>
                         </div>
                       </div>
-                      <div className="flex gap-2 mt-3 pt-3 border-t border-outline-variant/30">
-                        <Link to="/jobs" className="text-[11px] px-3 py-1.5 rounded border border-outline-variant text-on-surface-variant hover:bg-surface-container transition-colors font-label-sm cursor-pointer">
-                          View Details
-                        </Link>
-                        <button className="text-[11px] px-3 py-1.5 rounded border border-outline-variant text-on-surface-variant hover:bg-surface-container transition-colors font-label-sm cursor-pointer">
-                          Save
-                        </button>
-                        <Link to="/jobs" className="text-[11px] px-3 py-1.5 rounded text-white bg-gradient-to-r from-[#EC4899] to-[#FF8A3D] hover:opacity-90 transition-all font-label-sm cursor-pointer ml-auto">
-                          Apply
-                        </Link>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Error state */}
+                {!topJobsLoading && topJobsError && (
+                  <div className="p-6 text-center bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/50 rounded-lg">
+                    <span className="material-symbols-outlined text-red-500 text-3xl mb-2">error</span>
+                    <p className="font-label-md text-label-md text-red-800 dark:text-red-300 font-bold">Failed to load top jobs</p>
+                    <p className="font-body-sm text-body-sm text-red-600 dark:text-red-400 mt-1">{topJobsError}</p>
+                  </div>
+                )}
+
+                {/* Empty state */}
+                {!topJobsLoading && !topJobsError && topJobs.length === 0 && (
+                  <div className="p-8 text-center bg-surface-container-lowest border border-outline-variant/50 rounded-lg">
+                    <span className="material-symbols-outlined text-outline text-4xl mb-2">work_off</span>
+                    <p className="font-label-md text-label-md text-on-surface font-bold">No matching jobs found</p>
+                    <p className="font-body-sm text-body-sm text-on-surface-variant mt-1 max-w-md mx-auto">
+                      We couldn't find suitable opportunities from the previous month. Try updating your profile or resume to improve your matches.
+                    </p>
+                  </div>
+                )}
+
+                {/* Jobs list */}
+                {!topJobsLoading && !topJobsError && topJobs.length > 0 && (
+                  <div className="flex flex-col gap-3">
+                    {topJobs.map((job) => {
+                      let matchColor = 'text-secondary';
+                      let matchBg = 'bg-secondary/10';
+                      if (job.match_score >= 90) {
+                        matchColor = 'text-tertiary';
+                        matchBg = 'bg-tertiary-container/10';
+                      } else if (job.match_score >= 75) {
+                        matchColor = 'text-primary';
+                        matchBg = 'bg-primary/10';
+                      }
+
+                      let postedText = '';
+                      if (job.posted_at) {
+                        try {
+                          const dt = new Date(job.posted_at);
+                          const options = { month: 'short', day: 'numeric', year: 'numeric' };
+                          postedText = `Posted ${dt.toLocaleDateString('en-US', options)}`;
+                        } catch (e) {
+                          postedText = `Posted ${job.posted_at}`;
+                        }
+                      }
+
+                      return (
+                        <div
+                          key={job.id}
+                          className="bg-surface-container-lowest border border-outline-variant/50 rounded-lg p-4 hover:bg-surface-container-low hover:border-primary/30 transition-all group"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex gap-3 items-start">
+                              {job.company_logo ? (
+                                <img 
+                                  src={job.company_logo} 
+                                  alt={job.company} 
+                                  className="w-10 h-10 rounded-lg object-contain bg-surface-container-high border border-outline-variant shrink-0"
+                                  onError={(e) => { e.target.style.display = 'none'; }}
+                                />
+                              ) : null}
+                              <div className="w-10 h-10 rounded-lg bg-surface-container-high border border-outline-variant flex items-center justify-center shrink-0 font-bold text-primary text-base">
+                                {job.company ? job.company.charAt(0) : 'J'}
+                              </div>
+                              <div>
+                                <p className="font-label-md text-label-md font-bold text-on-background">{job.title}</p>
+                                <p className="font-body-sm text-body-sm text-on-surface-variant">
+                                  {job.company} • {job.location}
+                                </p>
+                                
+                                <div className="flex flex-wrap gap-2 mt-2">
+                                  <span className="text-[11px] px-2 py-0.5 rounded bg-surface-container text-on-surface font-semibold">
+                                    {job.salary_display || 'Salary not disclosed'}
+                                  </span>
+                                  {job.employment_type && (
+                                    <span className="text-[11px] px-2 py-0.5 rounded bg-surface-container text-on-surface-variant font-label-sm capitalize">
+                                      {job.employment_type.replace('_', ' ')}
+                                    </span>
+                                  )}
+                                  {job.work_mode && (
+                                    <span className="text-[11px] px-2 py-0.5 rounded bg-surface-container text-on-surface-variant font-label-sm">
+                                      {job.work_mode}
+                                    </span>
+                                  )}
+                                  {job.experience_years !== null && job.experience_years !== undefined && (
+                                    <span className="text-[11px] px-2 py-0.5 rounded bg-surface-container text-on-surface-variant font-label-sm">
+                                      {job.experience_years} yrs exp
+                                    </span>
+                                  )}
+                                </div>
+
+                                {job.skills && job.skills.length > 0 && (
+                                  <div className="flex flex-wrap gap-1.5 mt-2.5">
+                                    {job.skills.slice(0, 5).map((s) => (
+                                      <span key={s} className="text-[10px] px-2 py-0.5 rounded bg-surface-container-low text-on-surface-variant border border-outline-variant/40 font-label-sm font-semibold">
+                                        {s}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+
+                                {job.description && (
+                                  <p className="font-body-sm text-body-sm text-on-surface-variant mt-2.5 line-clamp-2">
+                                    {job.description}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                            <div className="shrink-0 text-right">
+                              <span className={`font-headline-sm text-headline-sm font-extrabold ${matchColor}`}>
+                                {Math.round(job.match_score)}%
+                              </span>
+                              <p className="font-label-sm text-[10px] text-on-surface-variant">Match</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 mt-3 pt-3 border-t border-outline-variant/30">
+                            {postedText && (
+                              <span className="text-[10px] text-on-surface-variant mr-auto font-body-sm">
+                                {postedText} {job.publisher ? `via ${job.publisher}` : ''}
+                              </span>
+                            )}
+                            <button
+                              onClick={() => navigate('/jobs', { state: { selectedJob: job } })}
+                              className="text-[11px] px-3 py-1.5 rounded border border-outline-variant text-on-surface-variant hover:bg-surface-container transition-colors font-label-sm cursor-pointer font-bold"
+                            >
+                              View Details
+                            </button>
+                            {job.apply_link || job.url ? (
+                              <a
+                                href={job.apply_link || job.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-[11px] px-4 py-1.5 rounded text-white bg-gradient-to-r from-[#EC4899] to-[#FF8A3D] hover:opacity-90 transition-all font-label-sm cursor-pointer font-bold ml-1"
+                              >
+                                Apply
+                              </a>
+                            ) : null}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               {/* 6. Skill Gap Analysis */}

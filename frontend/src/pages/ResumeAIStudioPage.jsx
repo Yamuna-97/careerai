@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { exportResumePDF } from "../utils/exportResumePDF";
+import ResumePreview from "../components/ResumePreview";
 
 const API = "/api/v1/resume/ai";
 const getToken = () =>
@@ -125,13 +127,12 @@ function LoadingState({ steps, currentStep }) {
         {steps.map((step, i) => (
           <div key={i} className="flex items-center gap-3 text-sm">
             <div
-              className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${
-                i < currentStep
-                  ? "bg-green-500"
-                  : i === currentStep
+              className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${i < currentStep
+                ? "bg-green-500"
+                : i === currentStep
                   ? "bg-[#EC4899] animate-pulse"
                   : "bg-gray-200"
-              }`}
+                }`}
             >
               {i < currentStep ? (
                 <span className="material-symbols-outlined text-white" style={{ fontSize: 12 }}>
@@ -141,7 +142,9 @@ function LoadingState({ steps, currentStep }) {
                 <span className="w-2 h-2 bg-white rounded-full block" />
               ) : null}
             </div>
-            <span className={i <= currentStep ? "text-gray-800 font-medium" : "text-gray-400"}>{step}</span>
+            <span className={i <= currentStep ? "text-gray-800 font-bold" : "text-gray-400"}>
+              {i === currentStep ? "✨ " : ""}{step}
+            </span>
           </div>
         ))}
       </div>
@@ -197,7 +200,7 @@ export default function ResumeAIStudioPage() {
   useEffect(() => {
     try {
       setSavedResumesList(JSON.parse(localStorage.getItem("careerai_saved_resumes") || "[]"));
-    } catch {}
+    } catch { }
   }, []);
 
   const saveActivity = (type, detail, extra = {}) => {
@@ -277,15 +280,15 @@ export default function ResumeAIStudioPage() {
       })),
       education: d.education
         ? [
-            {
-              id: "1",
-              institution: d.education.school || "",
-              degree: d.education.degree || "",
-              fieldOfStudy: "",
-              startDate: d.education.period?.split(" - ")[0] || "",
-              endDate: d.education.period?.split(" - ")[1] || "",
-            },
-          ]
+          {
+            id: "1",
+            institution: d.education.school || "",
+            degree: d.education.degree || "",
+            fieldOfStudy: "",
+            startDate: d.education.period?.split(" - ")[0] || "",
+            endDate: d.education.period?.split(" - ")[1] || "",
+          },
+        ]
         : [],
       skills: Object.values(d.skills || {})
         .flatMap((v, ci) =>
@@ -674,9 +677,8 @@ export default function ResumeAIStudioPage() {
               <button
                 key={r}
                 onClick={() => setTargetRole(r)}
-                className={`px-3 py-1.5 rounded-full text-[11px] font-semibold border transition-all ${
-                  targetRole === r ? "bg-emerald-600 text-white border-emerald-600" : "border-gray-200 text-gray-600"
-                }`}
+                className={`px-3 py-1.5 rounded-full text-[11px] font-semibold border transition-all ${targetRole === r ? "bg-emerald-600 text-white border-emerald-600" : "border-gray-200 text-gray-600"
+                  }`}
               >
                 {r}
               </button>
@@ -691,55 +693,53 @@ export default function ResumeAIStudioPage() {
     if (!result) return null;
     const { tool, data } = result;
     const accent = accentFor(tool);
-    if (tool === "analyze") return <AnalyzeResult data={data} accent={accent} />;
-    if (tool === "ats") return <ATSResult data={data} accent={accent} onFix={runImprove} />;
-    if (tool === "improve")
-      return (
-        <ImproveResult
-          data={data}
-          onApply={() => {
-            if (data.improved_resume_data) {
-              setResumeData(data.improved_resume_data);
-              sessionStorage.setItem("careerai_ai_session", JSON.stringify(data.improved_resume_data));
-            }
-            setResult(null);
-            setActiveTool(null);
-          }}
-        />
-      );
-    if (tool === "match") return <JobMatchResult data={data} accent={accent} />;
-    if (tool === "tailor")
-      return (
-        <TailorResult
-          data={data}
-          tailored={tailoredResume}
-          original={resumeData}
-          onApply={() => {
-            if (tailoredResume) {
-              setResumeData(tailoredResume);
-              sessionStorage.setItem("careerai_ai_session", JSON.stringify(tailoredResume));
-            }
-            setResult(null);
-            setActiveTool(null);
-          }}
-        />
-      );
-    if (tool === "skills") return <SkillsResult data={data} />;
-    if (tool === "bullet") return <BulletResult data={data} accent={accent} />;
-    if (tool === "generate")
-      return (
-        <GenerateResult
-          data={data}
-          onApply={() => {
-            if (data.resume_data) {
-              setResumeData(data.resume_data);
-              sessionStorage.setItem("careerai_ai_session", JSON.stringify(data.resume_data));
-            }
-            navigate("/resume/builder");
-          }}
-        />
-      );
-    return null;
+
+    // For single bullet point helper, we don't need a full resume document on the right
+    if (tool === "bullet") {
+      return <BulletResult data={data} accent={accent} />;
+    }
+
+    // Determine the tailored resume data if generated
+    let tailored = null;
+    if (tool === "tailor") {
+      tailored = tailoredResume;
+    } else if (tool === "improve") {
+      tailored = data.improved_resume_data;
+    } else if (tool === "generate") {
+      tailored = data.resume_data;
+    }
+
+    const handleApply = () => {
+      if (tool === "tailor" && tailoredResume) {
+        setResumeData(tailoredResume);
+        sessionStorage.setItem("careerai_ai_session", JSON.stringify(tailoredResume));
+      } else if (tool === "improve" && data.improved_resume_data) {
+        setResumeData(data.improved_resume_data);
+        sessionStorage.setItem("careerai_ai_session", JSON.stringify(data.improved_resume_data));
+      } else if (tool === "generate" && data.resume_data) {
+        setResumeData(data.resume_data);
+        sessionStorage.setItem("careerai_ai_session", JSON.stringify(data.resume_data));
+        navigate("/resume/builder");
+        return;
+      }
+      setResult(null);
+      setActiveTool(null);
+    };
+
+    return (
+      <ResumeAIResultLayout
+        tool={tool}
+        data={data}
+        originalResume={resumeData}
+        tailoredResume={tailored}
+        onApply={handleApply}
+        onBack={() => {
+          setResult(null);
+          setActiveTool(null);
+        }}
+        navigate={navigate}
+      />
+    );
   };
 
   return (
@@ -828,7 +828,7 @@ export default function ResumeAIStudioPage() {
 
         {!loading && isToolInput && renderToolInput()}
 
-        {!loading && result && !isToolInput && (
+        {!loading && !error && result && !isToolInput && (
           <div className="mb-8">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-black text-gray-900 text-lg">AI Results</h2>
@@ -847,7 +847,7 @@ export default function ResumeAIStudioPage() {
           </div>
         )}
 
-        {!loading && !isToolInput && !result && !resumeData && (
+        {!loading && !error && !isToolInput && !result && !resumeData && (
           <div className="flex flex-col items-center py-12 text-center">
             <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#EC4899]/10 to-[#FF8A3D]/10 flex items-center justify-center mb-6">
               <span className="material-symbols-outlined text-4xl text-[#EC4899]">auto_awesome</span>
@@ -914,7 +914,7 @@ export default function ResumeAIStudioPage() {
           </div>
         )}
 
-        {!loading && !isToolInput && !result && resumeData && (
+        {!loading && !error && !isToolInput && !result && resumeData && (
           <>
             <div className="mb-6">
               <h2 className="text-lg font-black text-gray-900 mb-1">What do you want to do?</h2>
@@ -970,9 +970,8 @@ export default function ResumeAIStudioPage() {
             {chatMessages.map((msg, i) => (
               <div key={i} className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}>
                 <div
-                  className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-xs ${
-                    msg.role === "user" ? "bg-purple-600 text-white" : "bg-white border border-gray-200 text-gray-800 shadow-sm"
-                  }`}
+                  className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-xs ${msg.role === "user" ? "bg-purple-600 text-white" : "bg-white border border-gray-200 text-gray-800 shadow-sm"
+                    }`}
                 >
                   {msg.content}
                 </div>
@@ -1111,9 +1110,8 @@ function AnalyzeResult({ data, accent }) {
           {data.recommendations.map((r, i) => (
             <div key={i} className="flex gap-3 items-start mb-3">
               <span
-                className={`text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 ${
-                  r.priority === "high" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
-                }`}
+                className={`text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 ${r.priority === "high" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
+                  }`}
               >
                 {r.priority?.toUpperCase()}
               </span>
@@ -1181,9 +1179,8 @@ function ATSResult({ data, accent, onFix }) {
           {data.recommendations.map((s, i) => (
             <div key={i} className="flex gap-2 text-[12px] mb-2">
               <span
-                className={`text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 h-fit ${
-                  s.priority === "high" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
-                }`}
+                className={`text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 h-fit ${s.priority === "high" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
+                  }`}
               >
                 {s.priority}
               </span>
@@ -1319,17 +1316,15 @@ function TailorResult({ data, tailored, original, onApply }) {
           <div className="flex gap-2">
             <button
               onClick={() => setView("original")}
-              className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold border ${
-                view === "original" ? "bg-gray-900 text-white border-gray-900" : "border-gray-200 text-gray-600"
-              }`}
+              className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold border ${view === "original" ? "bg-gray-900 text-white border-gray-900" : "border-gray-200 text-gray-600"
+                }`}
             >
               Original
             </button>
             <button
               onClick={() => setView("tailored")}
-              className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold border ${
-                view === "tailored" ? "bg-amber-500 text-white border-amber-500" : "border-gray-200 text-gray-600"
-              }`}
+              className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold border ${view === "tailored" ? "bg-amber-500 text-white border-amber-500" : "border-gray-200 text-gray-600"
+                }`}
             >
               Tailored
             </button>
@@ -1448,24 +1443,470 @@ function BulletResult({ data, accent }) {
   );
 }
 
-function GenerateResult({ data, onApply }) {
+
+
+/* ─── Responsive A4 Modal Preview Wrapper ──────────────────────────── */
+function ModalPreviewWrapper({ templateId, resumeData }) {
+  const containerRef = React.useRef(null);
+  const [scale, setScale] = useState(0.8);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const updateSize = () => {
+      const containerWidth = containerRef.current.offsetWidth;
+      const targetWidth = containerWidth - 48; // 24px padding on each side
+      const finalWidth = Math.min(targetWidth, 760);
+      const newScale = finalWidth / 800;
+      setScale(Math.max(0.3, newScale));
+    };
+
+    updateSize();
+    const timer = setTimeout(updateSize, 50);
+    window.addEventListener('resize', updateSize);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', updateSize);
+    };
+  }, []);
+
   return (
-    <div className="bg-white border border-gray-100 rounded-2xl p-6">
-      <h3 className="font-bold text-gray-800 mb-2">Resume Generated for {data.target_role}</h3>
-      <p className="text-sm text-gray-600 mb-1">
-        <b>Name:</b> {data.resume_data?.personal?.fullName}
-      </p>
-      <p className="text-sm text-gray-600 mb-4">
-        <b>Summary:</b> {(data.resume_data?.summary || "").substring(0, 150)}...
-      </p>
-      <div className="flex gap-3 flex-wrap">
-        <button
-          onClick={onApply}
-          className="flex items-center gap-2 px-5 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:opacity-90"
-        >
-          <span className="material-symbols-outlined text-sm">edit_note</span>Load into Builder
-        </button>
+    <div
+      ref={containerRef}
+      className="flex-1 overflow-y-auto p-4 md:p-8 bg-slate-100 flex justify-center items-start min-h-[500px]"
+    >
+      <div
+        className="shadow-xl bg-white flex-shrink-0"
+        style={{
+          width: '800px',
+          height: '1131px',
+          transform: `scale(${scale})`,
+          transformOrigin: 'top center',
+          marginBottom: `${Math.round(1131 * (scale - 1))}px`
+        }}
+      >
+        <ResumePreview resumeData={resumeData} templateId={templateId} scale={100} />
       </div>
+    </div>
+  );
+}
+
+/* ─── Premium Two-Column Resume Result Layout ─────────────────────── */
+function ResumeAIResultLayout({
+  tool,
+  data,
+  originalResume,
+  tailoredResume,
+  onApply,
+  onBack,
+  navigate
+}) {
+  const [view, setView] = useState(tailoredResume ? "tailored" : "original");
+  const [zoom, setZoom] = useState(30);
+  const [showFullPreview, setShowFullPreview] = useState(false);
+  const [expandedSection, setExpandedSection] = useState(null);
+
+  // Zoom controls
+  const zoomIn = () => setZoom(z => Math.min(100, z + 5));
+  const zoomOut = () => setZoom(z => Math.max(20, z - 5));
+
+  const activeResumeData = view === "tailored" ? tailoredResume : originalResume;
+  const activeTemplateId = localStorage.getItem("careerai_template_id") || "modern";
+
+  const renderLeftContent = () => {
+    switch (tool) {
+      case "analyze":
+        return (
+          <div className="space-y-4">
+            <div className="flex items-center gap-4 bg-pink-50/50 p-4 border border-pink-100/50 rounded-2xl">
+              <div className="relative flex items-center justify-center">
+                <ScoreRing score={data.overall_score || 0} size={72} stroke={6} color="#EC4899" />
+                <div className="absolute flex flex-col items-center">
+                  <span className="text-lg font-black text-pink-600">{data.overall_score}</span>
+                </div>
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5 mb-0.5">
+                  <span className="text-lg font-black text-gray-900">{data.quality_grade || "B"}</span>
+                  <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold">Quality Grade</span>
+                </div>
+                <p className="text-xs text-gray-500 line-clamp-2">{data.summary_text}</p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {data.strengths?.length > 0 && (
+                <div className="bg-green-50/60 border border-green-100/50 rounded-xl p-4">
+                  <h4 className="font-bold text-green-800 text-[11px] mb-2 uppercase tracking-wider flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-green-600 text-sm">check_circle</span> Strengths
+                  </h4>
+                  <ul className="space-y-1">
+                    {data.strengths.map((s, i) => (
+                      <li key={i} className="text-xs text-green-700">• {s}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {data.weaknesses?.length > 0 && (
+                <div className="bg-red-50/60 border border-red-100/50 rounded-xl p-4">
+                  <h4 className="font-bold text-red-800 text-[11px] mb-2 uppercase tracking-wider flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-red-500 text-sm">warning</span> Weaknesses
+                  </h4>
+                  <ul className="space-y-1">
+                    {data.weaknesses.map((w, i) => (
+                      <li key={i} className="text-xs text-red-700">• {w}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+
+            {data.recommendations?.length > 0 && (
+              <div className="bg-white border border-gray-100 rounded-xl p-4 space-y-2">
+                <h4 className="font-bold text-gray-800 text-[11px] uppercase tracking-wider">Recommendations</h4>
+                <div className="space-y-2.5 max-h-[220px] overflow-y-auto pr-1">
+                  {data.recommendations.map((r, i) => (
+                    <div key={i} className="flex gap-2.5 items-start">
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded font-black uppercase shrink-0 ${r.priority === "high" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
+                        }`}>
+                        {r.priority}
+                      </span>
+                      <div>
+                        <p className="text-xs font-bold text-gray-800">{r.section}</p>
+                        <p className="text-[11px] text-gray-500 leading-normal">{r.action}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+
+      case "ats":
+        return (
+          <div className="space-y-4">
+            <div className="flex items-center gap-4 bg-sky-50/50 p-4 border border-sky-100/50 rounded-2xl">
+              <div className="relative flex items-center justify-center">
+                <ScoreRing score={data.ats_score || 0} size={72} stroke={6} color="#0EA5E9" />
+                <div className="absolute flex flex-col items-center">
+                  <span className="text-lg font-black text-sky-600">{data.ats_score}</span>
+                </div>
+              </div>
+              <div className="flex-1">
+                <span className="text-[9px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-bold border border-blue-100 block w-fit mb-1">
+                  ATS Score Analysis
+                </span>
+                <p className="text-xs text-gray-500 line-clamp-2">{data.disclaimer || "Compatibility estimate"}</p>
+              </div>
+            </div>
+
+            <div className="bg-white border border-gray-100 rounded-xl p-4 space-y-3">
+              <ScoreBar label="Keyword Optimization" value={data.keyword_score || 0} color="#0EA5E9" />
+              <ScoreBar label="Structure Completeness" value={data.structure_score || 0} color="#0EA5E9" />
+              <ScoreBar label="Readability Rating" value={data.readability_score || 0} color="#0EA5E9" />
+              <ScoreBar label="Section Completeness" value={data.section_completeness || 0} color="#0EA5E9" />
+            </div>
+
+            {data.issues?.length > 0 && (
+              <div className="bg-amber-50/60 border border-amber-100/50 rounded-xl p-4">
+                <h4 className="font-bold text-amber-800 text-[11px] mb-2 uppercase tracking-wider">Formatting & Keywords</h4>
+                <div className="space-y-1.5">
+                  {data.issues.map((issue, i) => (
+                    <div key={i} className="flex gap-2 text-xs text-amber-700 leading-normal">
+                      <span className="material-symbols-outlined text-sm text-amber-600 shrink-0">info</span>
+                      <p><b>{issue.section}:</b> {issue.issue}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+
+      case "match":
+        return (
+          <div className="space-y-4">
+            <div className="flex items-center gap-4 bg-blue-50/50 p-4 border border-blue-100/50 rounded-2xl">
+              <div className="relative flex items-center justify-center">
+                <ScoreRing score={data.overall_match || 0} size={72} stroke={6} color="#3B82F6" />
+                <div className="absolute flex flex-col items-center">
+                  <span className="text-lg font-black text-blue-600">{data.overall_match}%</span>
+                </div>
+              </div>
+              <div className="flex-1">
+                <h4 className="font-bold text-gray-800 text-xs">Job Description Match</h4>
+                <p className="text-[11px] text-gray-500 mt-0.5">Resume suitability for target role</p>
+              </div>
+            </div>
+
+            <div className="bg-white border border-gray-100 rounded-xl p-4 space-y-2.5">
+              <ScoreBar label="Skills Match" value={data.skills_match || 0} color="#3B82F6" />
+              <ScoreBar label="Keyword Match" value={data.keyword_match || 0} color="#3B82F6" />
+              <ScoreBar label="Experience Match" value={data.experience_match || 0} color="#3B82F6" />
+              <ScoreBar label="Education Match" value={data.education_match || 0} color="#3B82F6" />
+            </div>
+
+            <div className="space-y-3">
+              {data.matching_skills?.length > 0 && (
+                <div className="bg-green-50/60 border border-green-100/50 rounded-xl p-4">
+                  <h4 className="font-bold text-green-800 text-[11px] mb-2 uppercase tracking-wider">Matching Skills</h4>
+                  <div className="flex flex-wrap gap-1.5">
+                    {data.matching_skills.map((s, i) => (
+                      <span key={i} className="text-[10px] bg-white border border-green-200 text-green-700 px-2 py-0.5 rounded-full">{s}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {data.missing_skills?.length > 0 && (
+                <div className="bg-red-50/60 border border-red-100/50 rounded-xl p-4">
+                  <h4 className="font-bold text-red-800 text-[11px] mb-2 uppercase tracking-wider">Missing Required Skills</h4>
+                  <div className="flex flex-wrap gap-1.5">
+                    {data.missing_skills.map((s, i) => (
+                      <span key={i} className="text-[10px] bg-white border border-red-200 text-red-700 px-2 py-0.5 rounded-full">{s}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+
+      case "tailor":
+      case "improve":
+        const changes = data.changes || data.changes_made || [];
+        return (
+          <div className="space-y-4">
+            <div className="bg-white border border-gray-100 rounded-2xl p-4">
+              <h4 className="font-black text-gray-900 text-sm mb-1">AI Proofread Complete</h4>
+              <p className="text-xs text-gray-500 leading-normal">
+                {tool === "tailor"
+                  ? "Generated a role-targeted version of your resume aligned with target description."
+                  : "Fixed grammar, spelling, and phrasing while keeping experience details accurate."}
+              </p>
+            </div>
+
+            <div className="bg-white border border-gray-100 rounded-xl p-4 space-y-3">
+              <h4 className="font-bold text-gray-800 text-[11px] uppercase tracking-wider">Changes Made</h4>
+              <div className="space-y-2.5 max-h-[300px] overflow-y-auto pr-1">
+                {changes.map((c, i) => {
+                  const isExpanded = expandedSection === i;
+
+                  let beforeText = "Original content.";
+                  let afterText = "Tailored content.";
+                  const sectionKey = c.section?.toLowerCase();
+
+                  if (sectionKey?.includes("summary") || sectionKey?.includes("profile")) {
+                    beforeText = originalResume?.summary || "No original summary.";
+                    afterText = tailoredResume?.summary || "No tailored summary.";
+                  } else if (sectionKey?.includes("skills")) {
+                    beforeText = (originalResume?.skills || []).map(s => s.name).join(", ") || "No skills listed.";
+                    afterText = (tailoredResume?.skills || []).map(s => s.name).join(", ") || "No skills listed.";
+                  } else if (sectionKey?.includes("experience") || sectionKey?.includes("work")) {
+                    beforeText = (originalResume?.experience || []).map(e => `${e.position} at ${e.company}`).join("\n• ") || "No experience listed.";
+                    afterText = (tailoredResume?.experience || []).map(e => `${e.position} at ${e.company}`).join("\n• ") || "No experience listed.";
+                  } else if (sectionKey?.includes("education")) {
+                    beforeText = (originalResume?.education || []).map(e => `${e.degree} at ${e.institution}`).join("\n• ") || "No education listed.";
+                    afterText = (tailoredResume?.education || []).map(e => `${e.degree} at ${e.institution}`).join("\n• ") || "No education listed.";
+                  } else if (sectionKey?.includes("project")) {
+                    beforeText = (originalResume?.projects || []).map(p => p.name).join("\n• ") || "No projects listed.";
+                    afterText = (tailoredResume?.projects || []).map(p => p.name).join("\n• ") || "No projects listed.";
+                  }
+
+                  return (
+                    <div key={i} className="border border-gray-100 rounded-xl overflow-hidden shadow-sm">
+                      <button
+                        onClick={() => setExpandedSection(isExpanded ? null : i)}
+                        className="w-full flex items-center justify-between px-3.5 py-2.5 bg-gray-50 text-left hover:bg-gray-100 transition-colors"
+                      >
+                        <span className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
+                          <span className="material-symbols-outlined text-[#EC4899] text-sm">check_circle</span>
+                          {c.section}
+                        </span>
+                        <span className="material-symbols-outlined text-gray-400 text-sm">
+                          {isExpanded ? "expand_less" : "expand_more"}
+                        </span>
+                      </button>
+
+                      {isExpanded && (
+                        <div className="p-3 bg-white space-y-2.5 border-t border-gray-100 text-[11px] leading-relaxed">
+                          <p className="text-purple-700 font-semibold">{c.change}</p>
+                          <div className="grid grid-cols-1 gap-2 pt-2 border-t border-gray-50">
+                            <div>
+                              <p className="font-bold text-gray-400 uppercase text-[9px] mb-0.5">Before</p>
+                              <div className="bg-red-50/50 p-2 border border-red-100/30 rounded text-gray-600 whitespace-pre-line max-h-24 overflow-y-auto">{beforeText}</div>
+                            </div>
+                            <div>
+                              <p className="font-bold text-gray-400 uppercase text-[9px] mb-0.5">After</p>
+                              <div className="bg-green-50/50 p-2 border border-green-100/30 rounded text-gray-800 font-medium whitespace-pre-line max-h-24 overflow-y-auto">{afterText}</div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        );
+
+      case "skills":
+        return <SkillsResult data={data} />;
+
+      case "generate":
+        return (
+          <div className="space-y-4">
+            <div className="bg-white border border-gray-100 rounded-2xl p-5">
+              <h3 className="font-bold text-gray-800 text-sm mb-2">Targeted Resume Generated</h3>
+              <p className="text-xs text-gray-600 mb-1"><b>Target Role:</b> {data.target_role}</p>
+              <p className="text-xs text-gray-600">Generated personal details and structural matching templates for this profile.</p>
+            </div>
+            <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 text-xs text-amber-800">
+              <p>Press <b>✓ Apply Tailored Resume</b> to load this generated design structure into the builder dashboard.</p>
+            </div>
+          </div>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start animate-fade-in">
+      {/* Left Column — Analysis & Details */}
+      <div className="lg:col-span-5 space-y-6">
+        {renderLeftContent()}
+
+        {/* Unified Bottom Action */}
+        {tailoredResume && (
+          <div className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm flex items-center justify-between gap-4">
+            <div>
+              <p className="text-[10px] text-gray-400 font-bold uppercase">Ready to Use?</p>
+              <p className="text-xs text-gray-500">Apply this tailored layout to your builder profile.</p>
+            </div>
+            <button
+              onClick={onApply}
+              className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl text-xs font-bold hover:opacity-90 transition-opacity shadow-md cursor-pointer animate-pulse"
+            >
+              <span className="material-symbols-outlined text-sm">check_circle</span>
+              Apply Tailored Resume
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Right Column — Actual Resume Preview */}
+      <div className="lg:col-span-7 space-y-4">
+        {/* Toggle and Zoom Toolbar */}
+        <div className="bg-white border border-gray-100 rounded-xl p-3 shadow-sm flex items-center justify-between flex-wrap gap-3">
+          {/* Toggle */}
+          <div className="flex gap-1 bg-gray-50 p-1 border border-gray-200/50 rounded-lg">
+            <button
+              onClick={() => setView("original")}
+              className={`px-3 py-1.5 rounded-md text-[10px] font-bold transition-all cursor-pointer ${view === "original"
+                ? "bg-white text-gray-800 shadow-sm border border-gray-200/30"
+                : "text-gray-500 hover:text-gray-800"
+                }`}
+            >
+              Original
+            </button>
+            {tailoredResume && (
+              <button
+                onClick={() => setView("tailored")}
+                className={`px-3 py-1.5 rounded-md text-[10px] font-bold transition-all cursor-pointer ${view === "tailored"
+                  ? "bg-white text-[#EC4899] shadow-sm border border-[#EC4899]/15"
+                  : "text-gray-500 hover:text-[#EC4899]"
+                  }`}
+              >
+                Tailored
+              </button>
+            )}
+          </div>
+
+          {/* Zoom */}
+          <div className="flex items-center gap-1 text-[11px] font-bold text-gray-600">
+            <button
+              onClick={zoomOut}
+              className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-gray-50 flex items-center justify-center cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-sm select-none">remove</span>
+            </button>
+            <span className="w-10 text-center select-none">{zoom}%</span>
+            <button
+              onClick={zoomIn}
+              className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-gray-50 flex items-center justify-center cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-sm select-none">add</span>
+            </button>
+          </div>
+
+          {/* Download & Open Full actions */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => exportResumePDF()}
+              className="flex items-center gap-1 border border-gray-200 text-gray-600 px-3 py-1.5 rounded-lg text-[10px] font-bold hover:bg-gray-50 transition-colors shadow-sm bg-white cursor-pointer"
+              title="Download PDF"
+            >
+              <span className="material-symbols-outlined text-sm">download</span>
+              Download PDF
+            </button>
+            <button
+              onClick={() => setShowFullPreview(true)}
+              className="flex items-center gap-1 border border-gray-200 text-gray-600 px-3 py-1.5 rounded-lg text-[10px] font-bold hover:bg-gray-50 transition-colors shadow-sm bg-white cursor-pointer"
+              title="Open Full Preview"
+            >
+              <span className="material-symbols-outlined text-sm">fullscreen</span>
+              Full Preview
+            </button>
+          </div>
+        </div>
+
+        {/* Scrollable A4 Document Canvas Container */}
+        <div className="bg-slate-100 border border-gray-200/50 rounded-2xl p-6 min-h-[550px] overflow-hidden flex justify-center items-start relative shadow-inner">
+          <div
+            className="transition-transform duration-200"
+            style={{
+              width: '800px',
+              height: '1131px',
+              transform: `scale(${zoom / 100})`,
+              transformOrigin: 'top center',
+              marginBottom: `${Math.round(1131 * (zoom / 100 - 1))}px`
+            }}
+          >
+            <ResumePreview resumeData={activeResumeData} templateId={activeTemplateId} scale={100} />
+          </div>
+        </div>
+      </div>
+
+      {/* Large Full Preview Modal Overlay */}
+      {showFullPreview && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[999] flex items-center justify-center p-4">
+          <div className="bg-surface rounded-2xl w-full max-w-[850px] max-h-[90vh] overflow-hidden flex flex-col border border-outline-variant shadow-2xl">
+            <div className="flex justify-between items-center px-6 py-4 border-b border-outline-variant/40 shrink-0 bg-white">
+              <div>
+                <h3 className="font-bold text-on-surface text-base">Full Document Preview</h3>
+                <p className="text-xs text-on-surface-variant">Reviewing {view} layout design</p>
+              </div>
+              <button
+                onClick={() => setShowFullPreview(false)}
+                className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-surface-container text-on-surface-variant cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-lg">close</span>
+              </button>
+            </div>
+            <ModalPreviewWrapper resumeData={activeResumeData} templateId={activeTemplateId} />
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-outline-variant/40 shrink-0 bg-white">
+              <button
+                onClick={() => setShowFullPreview(false)}
+                className="px-4 py-2 border border-outline-variant rounded-lg text-xs font-semibold hover:bg-surface-container cursor-pointer"
+              >
+                Close Preview
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

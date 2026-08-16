@@ -9,7 +9,7 @@ SQLAlchemy models for the Intelligent Job Search feature.
 """
 
 from datetime import datetime
-from sqlalchemy import Column, String, Text, DateTime, Float, Integer, Boolean, JSON, ForeignKey
+from sqlalchemy import Column, String, Text, DateTime, Float, Integer, Boolean, JSON, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -125,3 +125,24 @@ class JobSearchHistory(Base):
     filters = Column(JSON, default=dict)       # Snapshot of search parameters
     results_count = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class TopFiveJobsCache(Base):
+    """
+    Caches the calculated Top 5 Jobs for a user for a given previous completed month.
+    """
+    __tablename__ = "top_five_jobs_cache"
+
+    id = Column(String, primary_key=True, index=True)
+    user_id = Column(String, index=True, nullable=False)
+    year = Column(Integer, nullable=False)
+    month = Column(Integer, nullable=False)
+    period = Column(String, nullable=False) # e.g. "July 2026"
+    jobs_json = Column(JSON, nullable=False) # List of job dicts
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint('user_id', 'year', 'month', name='_user_month_year_uc'),
+    )
+

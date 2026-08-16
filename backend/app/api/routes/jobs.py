@@ -16,7 +16,7 @@ from pydantic import BaseModel
 
 from app.core.database import get_db
 from app.core.security import get_current_user_id
-from app.models.jobs import JobSearchProfile, SavedJob, JobApplication, JobSearchHistory
+from app.models.jobs import JobSearchProfile, SavedJob, JobApplication, JobSearchHistory, TopFiveJobsCache
 from app.models.resume import Resume
 from app.services import jsearch_service, job_matching_service, resume_ai_service
 from app.services.job_normalizer import normalize_job, deduplicate_jobs
@@ -38,7 +38,66 @@ def _get_user_id(
     except BaseException:
         return "local_user"
 
+
+def format_salary_display(job: dict) -> Optional[str]:
+    min_sal = job.get("salary_min")
+    max_sal = job.get("salary_max")
+    currency = job.get("salary_currency")
+    period = job.get("salary_period")
+    
+    if min_sal is None and max_sal is None:
+        return None
+        
+    curr_symbol = currency or ""
+    if currency == "INR":
+        curr_symbol = "₹"
+    elif currency == "USD":
+        curr_symbol = "$"
+    elif currency == "EUR":
+        curr_symbol = "€"
+    elif currency == "GBP":
+        curr_symbol = "£"
+        
+    period_str = ""
+    if period:
+        period_str = f" / {period.lower()}"
+        
+    # LPA conversion for INR
+    if currency == "INR" and period == "YEAR":
+        min_lpa = round(min_sal / 100000, 1) if min_sal else None
+        max_lpa = round(max_sal / 100000, 1) if max_sal else None
+        
+        # Clean .0 for integers
+        if min_lpa is not None and min_lpa.is_integer():
+            min_lpa = int(min_lpa)
+        if max_lpa is not None and max_lpa.is_integer():
+            max_lpa = int(max_lpa)
+            
+        if min_lpa is not None and max_lpa is not None:
+            return f"₹{min_lpa}–{max_lpa} LPA"
+        elif max_lpa is not None:
+            return f"Up to ₹{max_lpa} LPA"
+        elif min_lpa is not None:
+            return f"₹{min_lpa} LPA"
+            
+    # Default formatting
+    def format_num(val):
+        if val is None: return ""
+        if val >= 1000:
+            return f"{int(val):,}"
+        return str(int(val))
+        
+    if min_sal is not None and max_sal is not None:
+        return f"{curr_symbol}{format_num(min_sal)}–{curr_symbol}{format_num(max_sal)}{period_str}"
+    elif max_sal is not None:
+        return f"Up to {curr_symbol}{format_num(max_sal)}{period_str}"
+    elif min_sal is not None:
+        return f"From {curr_symbol}{format_num(min_sal)}{period_str}"
+    return None
+
+
 router = APIRouter()
+
 
 
 
@@ -229,6 +288,192 @@ def update_profile(data: ProfileCreateUpdate, db: Session = Depends(get_db), cur
 
     db.commit()
     return {"success": True, "message": "Profile updated successfully"}
+
+
+@router.get("/top-five", summary="Get top 5 recommended jobs for the previous month")
+def get_top_five_jobs(db: Session = Depends(get_db), current_user_id: str = Depends(_get_user_id)):
+    # 1. Calculate previous completed calendar month
+    now = datetime.utcnow()
+    if now.month == 1:
+        prev_month = 12
+        prev_year = now.year - 1
+    else:
+        prev_month = now.month - 1
+        prev_year = now.year
+
+    months_names = [
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
+    ]
+    period_str = f"{months_names[prev_month - 1]} {prev_year}"
+
+    # 2. Check database/cache
+    cache_entry = db.query(TopFiveJobsCache).filter(
+        TopFiveJobsCache.user_id == current_user_id,
+        TopFiveJobsCache.year == prev_year,
+        TopFiveJobsCache.month == prev_month
+    ).first()
+
+    if cache_entry:
+        print(f"[Top-Five] Cache hit for {current_user_id} - {period_str}")
+        return {
+            "success": True,
+            "period": cache_entry.period,
+            "year": cache_entry.year,
+            "month": cache_entry.month,
+            "total": len(cache_entry.jobs_json),
+            "updated_at": cache_entry.updated_at.isoformat() if cache_entry.updated_at else datetime.utcnow().isoformat(),
+            "jobs": cache_entry.jobs_json
+        }
+
+    print(f"[Top-Five] Cache miss for {current_user_id} - {period_str}. Fetching from JSearch...")
+
+    # 3. Gather user profile/resume preferences
+    profile = db.query(JobSearchProfile).filter(JobSearchProfile.user_id == current_user_id).first()
+    resumes = get_all_resumes(db, current_user_id)
+
+    queries = []
+    locations = []
+    employment_types = []
+    work_from_home = False
+    profile_dict = {}
+
+    if profile:
+        profile_dict = {
+            "target_roles": profile.target_roles or [],
+            "skills": profile.skills or [],
+            "keywords": profile.keywords or [],
+            "experience_level": profile.experience_level,
+            "locations": profile.locations or [],
+            "work_modes": profile.work_modes or [],
+            "employment_types": profile.employment_types or [],
+        }
+        queries = jsearch_service.generate_search_queries(
+            profile.target_roles, profile.skills, profile.keywords, profile.experience_level
+        )
+        locations = profile.locations or []
+        employment_types = profile.employment_types or []
+        work_from_home = "remote" in [m.lower() for m in (profile.work_modes or [])]
+    elif resumes:
+        latest_resume = resumes[0]
+        resume_roles = [latest_resume.title] if latest_resume.title else []
+        resume_skills = [s.name for s in latest_resume.skills if s.name]
+        profile_dict = {
+            "target_roles": resume_roles,
+            "skills": resume_skills,
+            "keywords": [],
+            "experience_level": "any",
+            "locations": [latest_resume.location] if latest_resume.location else [],
+            "work_modes": [],
+            "employment_types": [],
+        }
+        queries = jsearch_service.generate_search_queries(resume_roles, resume_skills, [], "any")
+        locations = [latest_resume.location] if latest_resume.location else []
+        work_from_home = False
+    else:
+        # Return success with empty results if no profile/resume exists
+        return {
+            "success": True,
+            "period": period_str,
+            "year": prev_year,
+            "month": prev_month,
+            "total": 0,
+            "updated_at": datetime.utcnow().isoformat(),
+            "jobs": []
+        }
+
+    # 4. Search jobs via JSearch
+    raw_jobs, _, err_msg = jsearch_service.search_jobs(
+        queries=queries,
+        locations=locations,
+        employment_types=employment_types,
+        experience_level=profile.experience_level if profile else "any",
+        date_posted="all", # Need 'all' to look back to previous calendar month
+        work_from_home=work_from_home,
+        num_pages=2
+    )
+
+    # Normalize
+    normalized = [normalize_job(r) for r in raw_jobs if r]
+    normalized = deduplicate_jobs(normalized)
+
+    # Filter for previous completed month, or modify date if it is fallback data
+    target_jobs = []
+    for job in normalized:
+        job_id = job.get("id", "")
+        is_fallback = job_id.startswith("jsearch_fb_")
+        
+        if is_fallback:
+            # Set fallback job date to target month so it passes filter
+            job["posted_at"] = f"{prev_year}-{str(prev_month).zfill(2)}-15"
+            job["posted_date"] = f"{prev_year}-{str(prev_month).zfill(2)}-15"
+
+        posted_at = job.get("posted_at")
+        if posted_at:
+            try:
+                parts = posted_at.split("-")
+                if len(parts) == 3:
+                    y = int(parts[0])
+                    m = int(parts[1])
+                    if y == prev_year and m == prev_month:
+                        target_jobs.append(job)
+            except Exception:
+                pass
+
+    # Score and check if saved
+    scored_jobs = []
+    for job in target_jobs:
+        match_details = job_matching_service.match_job(profile_dict, job, use_ai=False)
+        job.update(match_details)
+
+        # Check if already saved
+        saved = db.query(SavedJob).filter(
+            SavedJob.user_id == current_user_id,
+            SavedJob.external_job_id == job.get("id")
+        ).first()
+        job["is_saved"] = saved is not None
+        job["saved_id"] = saved.id if saved else None
+
+        # Format salary display
+        sal_display = format_salary_display(job)
+        if sal_display:
+            job["salary_display"] = sal_display
+
+        scored_jobs.append(job)
+
+    # Sort and slice
+    scored_jobs.sort(key=lambda x: x.get("match_score", 0), reverse=True)
+    top_five = scored_jobs[:5]
+
+    # Save to Cache
+    if not err_msg:
+        try:
+            cache_id = str(uuid.uuid4())
+            new_cache = TopFiveJobsCache(
+                id=cache_id,
+                user_id=current_user_id,
+                year=prev_year,
+                month=prev_month,
+                period=period_str,
+                jobs_json=top_five
+            )
+            db.add(new_cache)
+            db.commit()
+            print(f"[Top-Five] Stored cache for {current_user_id} - {period_str}")
+        except Exception as e:
+            db.rollback()
+            print(f"[Top-Five] Error storing cache: {e}")
+
+    return {
+        "success": True,
+        "period": period_str,
+        "year": prev_year,
+        "month": prev_month,
+        "total": len(top_five),
+        "updated_at": datetime.utcnow().isoformat(),
+        "jobs": top_five,
+        "error_message": err_msg
+    }
 
 
 # ── Search Endpoints ──────────────────────────────────────────────────────────

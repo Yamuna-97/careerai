@@ -77,6 +77,15 @@ def _handle_ai_exception(feature: str, exc: Exception):
                 "message": "AI service is not configured. Please set GEMINI_API_KEY in backend .env file.",
             }
         )
+    elif "429" in str(exc) or "too many requests" in str(exc).lower() or "quota" in str(exc).lower():
+        return JSONResponse(
+            status_code=429,
+            content={
+                "success": False,
+                "error": "rate_limit_exceeded",
+                "message": "Gemini API rate limit or quota exceeded. Please try again in a few moments.",
+            }
+        )
     raise HTTPException(
         status_code=500,
         detail="AI service is temporarily unavailable. Please try again later."

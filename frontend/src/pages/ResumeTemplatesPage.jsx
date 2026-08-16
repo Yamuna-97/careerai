@@ -16,6 +16,116 @@ const TEMPLATES_CONFIG = [
   { id: 'richard', name: 'Richard Sanchez', category: 'Business', ats: 'Standard', desc: 'Professional navy blue sidebar layout with circle photo.' }
 ];
 
+
+/* ─── Responsive A4 Card Preview Wrapper ───────────────────────────── */
+function TemplatePreviewWrapper({ templateId, resumeData, onClick }) {
+  const containerRef = React.useRef(null);
+  const [scale, setScale] = useState(0.25);
+  const [containerHeight, setContainerHeight] = useState(280);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const updateSize = () => {
+      const containerWidth = containerRef.current.offsetWidth;
+      const targetWidth = containerWidth * 0.85;
+      const finalWidth = Math.min(targetWidth, 320);
+      const newScale = finalWidth / 800;
+      setScale(newScale);
+
+      // A4 aspect ratio (1 : 1.414) -> height = width * 1.414
+      const calculatedHeight = finalWidth * 1.414;
+      setContainerHeight(Math.round(calculatedHeight + 32));
+    };
+
+    updateSize();
+    const timer = setTimeout(updateSize, 50);
+
+    window.addEventListener('resize', updateSize);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', updateSize);
+    };
+  }, []);
+
+  return (
+    <div
+      ref={containerRef}
+      onClick={onClick}
+      className="w-full bg-slate-100 overflow-hidden relative border-b border-outline-variant/30 flex justify-center items-center cursor-pointer transition-all duration-300"
+      style={{ height: `${containerHeight}px` }}
+    >
+      <div
+        className="transition-transform duration-300 group-hover:scale-[1.03]"
+        style={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          flexShrink: 0
+        }}
+      >
+        <div
+          className="shadow-md transition-shadow duration-300 group-hover:shadow-lg pointer-events-none"
+          style={{
+            width: '800px',
+            height: '1131px',
+            transform: `scale(${scale})`,
+            transformOrigin: 'center center',
+            flexShrink: 0
+          }}
+        >
+          <ResumePreview resumeData={resumeData} templateId={templateId} scale={100} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Responsive A4 Modal Preview Wrapper ──────────────────────────── */
+function ModalPreviewWrapper({ templateId, resumeData }) {
+  const containerRef = React.useRef(null);
+  const [scale, setScale] = useState(0.8);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const updateSize = () => {
+      const containerWidth = containerRef.current.offsetWidth;
+      const targetWidth = containerWidth - 48; // 24px padding on each side
+      const finalWidth = Math.min(targetWidth, 760);
+      const newScale = finalWidth / 800;
+      setScale(Math.max(0.3, newScale));
+    };
+
+    updateSize();
+    const timer = setTimeout(updateSize, 50);
+    window.addEventListener('resize', updateSize);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', updateSize);
+    };
+  }, []);
+
+  return (
+    <div
+      ref={containerRef}
+      className="flex-1 overflow-y-auto p-4 md:p-8 bg-slate-100 flex justify-center items-start min-h-[500px]"
+    >
+      <div
+        className="shadow-xl bg-white flex-shrink-0"
+        style={{
+          width: '800px',
+          height: '1131px',
+          transform: `scale(${scale})`,
+          transformOrigin: 'top center',
+          marginBottom: `${Math.round(1131 * (scale - 1))}px`
+        }}
+      >
+        <ResumePreview resumeData={resumeData} templateId={templateId} scale={100} />
+      </div>
+    </div>
+  );
+}
+
+
 export default function ResumeTemplatesPage() {
   const navigate = useNavigate();
   
@@ -122,16 +232,18 @@ export default function ResumeTemplatesPage() {
               >
                 
                 {/* Visual Thumbnail (Live Preview box rendered inside a scaled wrapper to avoid placeholders) */}
-                <div className="h-64 bg-slate-100 overflow-hidden relative border-b border-outline-variant/30 flex justify-center items-start pt-4 cursor-pointer" onClick={() => setActivePreviewTpl(tpl.id)}>
-                  <div className="origin-top scale-[0.25] transition-transform duration-300 group-hover:scale-[0.27] shadow-lg pointer-events-none">
-                    <ResumePreview resumeData={userResumeData} templateId={tpl.id} scale={100} />
-                  </div>
+                <div className="relative overflow-hidden border-b border-outline-variant/30">
+                  <TemplatePreviewWrapper
+                    resumeData={userResumeData}
+                    templateId={tpl.id}
+                    onClick={() => setActivePreviewTpl(tpl.id)}
+                  />
                   
                   {/* Overlay for quick action */}
-                  <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                  <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 pointer-events-none">
                     <button
                       onClick={(e) => { e.stopPropagation(); setActivePreviewTpl(tpl.id); }}
-                      className="bg-white text-slate-900 px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-sm hover:scale-105 transition-transform cursor-pointer"
+                      className="bg-white text-slate-900 px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-sm hover:scale-105 transition-transform cursor-pointer pointer-events-auto"
                     >
                       Preview Large
                     </button>
@@ -200,11 +312,7 @@ export default function ResumeTemplatesPage() {
             </div>
 
             {/* Scrollable Preview Canvas */}
-            <div className="flex-1 overflow-y-auto p-8 bg-slate-100 flex justify-center items-start">
-              <div className="shadow-lg">
-                <ResumePreview resumeData={userResumeData} templateId={activePreviewTpl} scale={90} />
-              </div>
-            </div>
+            <ModalPreviewWrapper resumeData={userResumeData} templateId={activePreviewTpl} />
 
             {/* Modal Actions */}
             <div className="flex justify-end gap-3 px-6 py-4 border-t border-outline-variant/40 shrink-0 bg-surface">

@@ -44,8 +44,8 @@ def get_gemini_model(task: str) -> str:
     """
     tier = AI_MODEL_TASK_MAPPING.get(task, "fast")
     if tier == "pro":
-        return settings.GEMINI_PRO_MODEL or "gemini-2.5-pro"
-    return settings.GEMINI_FAST_MODEL or "gemini-2.5-flash"
+        return settings.GEMINI_PRO_MODEL or "gemini-3.5-flash-lite"
+    return settings.GEMINI_FAST_MODEL or "gemini-3.5-flash-lite"
 
 
 def clean_and_parse_json(raw: str) -> Dict[str, Any]:
@@ -124,9 +124,9 @@ def call_gemini_api(
                 response = client.post(api_url, headers=headers, params=params, json=payload)
                 
                 # If model identifier returns 404, retry with fallback model identifier
-                if response.status_code == 404 and model_name != "gemini-2.5-flash":
-                    logger.warning(f"[Gemini Service] Model '{model_name}' returned 404. Retrying with fallback 'gemini-2.5-flash'.")
-                    fallback_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+                if response.status_code == 404 and model_name != "gemini-3.5-flash-lite":
+                    logger.warning(f"[Gemini Service] Model '{model_name}' returned 404. Retrying with fallback 'gemini-3.5-flash-lite'.")
+                    fallback_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent"
                     response = client.post(fallback_url, headers=headers, params=params, json=payload)
 
                 response.raise_for_status()

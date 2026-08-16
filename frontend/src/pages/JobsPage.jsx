@@ -42,6 +42,14 @@ export default function JobsPage() {
     checkProfile();
   }, []);
 
+  useEffect(() => {
+    if (location.state?.selectedJob) {
+      setSelectedJob(location.state.selectedJob);
+      // Clean up state history to prevent re-opening on reload
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
+
   const checkProfile = async () => {
     setIsLoadingProfile(true);
     try {

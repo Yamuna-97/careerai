@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../utils/supabase';
+import apiClient from '../api/client';
 
 export default function SignupPage() {
   const navigate = useNavigate();
@@ -52,37 +53,24 @@ export default function SignupPage() {
 
       if (user) {
         if (session) {
+          localStorage.setItem('access_token', session.access_token);
           localStorage.setItem('token', session.access_token);
           
-          // Sync real profile data to local DB using the verified JWT
-          const syncRes = await fetch("http://localhost:8000/api/v1/auth/sync", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${session.access_token}`
-            },
-            body: JSON.stringify({
-              id: user.id,
-              email: user.email,
-              // Use the name exactly as typed in the form
-              full_name: formData.name.trim()
-            })
+          // Sync real profile data to local DB using the verified JWT via apiClient
+          await apiClient.post('/auth/sync', {
+            id: user.id,
+            email: user.email,
+            full_name: formData.name.trim()
           });
 
-          if (syncRes.ok) {
-            navigate('/dashboard');
-          } else {
-            setErrorMsg("Could not register profile in application database.");
-          }
+          navigate('/dashboard');
         } else {
-          // Email confirmation is enabled in Supabase Dashboard
-          alert("Signup successful! Please check your email to verify your account, then log in.");
-          navigate('/login');
+          setErrorMsg("Account created! Please check your email to confirm registration, then log in.");
         }
       }
     } catch (err) {
       console.error(err);
-      setErrorMsg("An unexpected registration error occurred.");
+      setErrorMsg("An unexpected error occurred during registration.");
     } finally {
       setIsSubmitting(false);
     }
@@ -253,7 +241,7 @@ export default function SignupPage() {
 
           {/* Submit Action */}
           <button
-            className="w-full h-12 bg-primary-container text-on-primary rounded-[10px] font-label-md text-label-md shadow-md hover:bg-[#4338CA] hover:-translate-y-[1px] hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50"
+            className="w-full h-12 text-white rounded-[10px] font-label-md text-label-md shadow-md hover:-translate-y-[1px] hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 bg-gradient-to-r from-[#EC4899] to-[#FF8A3D] hover:opacity-90"
             type="submit"
             disabled={isSubmitting}
           >

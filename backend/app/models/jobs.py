@@ -36,7 +36,7 @@ class JobSearchProfile(Base):
     locations = Column(JSON, default=list)           # ["Chennai", "Bangalore", "Remote"]
     work_modes = Column(JSON, default=list)          # ["remote", "hybrid", "onsite"]
     employment_types = Column(JSON, default=list)    # ["full_time", "internship"]
-    country_code = Column(String, default="in")      # adzuna country: "in", "gb", "us"
+    country_code = Column(String, default="in")      # JSearch country: "in", "gb", "us"
 
     # Salary
     salary_min = Column(Integer, nullable=True)
@@ -52,7 +52,7 @@ class JobSearchProfile(Base):
 
 class SavedJob(Base):
     """
-    A job the user has bookmarked from Adzuna search results.
+    A job the user has bookmarked from JSearch results.
     Preserves the original external URL for direct applications.
     """
     __tablename__ = "saved_jobs"
@@ -61,9 +61,9 @@ class SavedJob(Base):
     user_id = Column(String, index=True, nullable=False)
     profile_id = Column(String, ForeignKey("job_search_profiles.id", ondelete="SET NULL"), nullable=True)
 
-    # External job data (normalized from Adzuna)
-    external_job_id = Column(String, index=True)     # Adzuna's redirect_url hash
-    source = Column(String, default="adzuna")
+    # External job data (normalized from JSearch)
+    external_job_id = Column(String, index=True)     # JSearch job_id
+    source = Column(String, default="jsearch")
     title = Column(String, nullable=False)
     company = Column(String, default="")
     location = Column(String, default="")
@@ -113,7 +113,7 @@ class JobApplication(Base):
 
 class JobSearchHistory(Base):
     """
-    Logs each Adzuna search for analytics and "Search Again" workflows.
+    Logs each JSearch query for analytics and "Search Again" workflows.
     """
     __tablename__ = "job_search_history"
 

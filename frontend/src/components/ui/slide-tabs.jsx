@@ -110,7 +110,7 @@ const Cursor = ({ position }) => {
         stiffness: 400,
         damping: 30,
       }}
-      className="absolute z-0 h-[28px] rounded-full bg-primary shadow-sm"
+      className="absolute z-0 h-[28px] rounded-full bg-gradient-to-r from-[#EC4899] to-[#FF8A3D] shadow-md"
     />
   );
 };

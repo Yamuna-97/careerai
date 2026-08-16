@@ -1,442 +1,234 @@
 """
 app/api/routes/resume_ai.py
 ────────────────────────────
-AI-powered resume endpoints: extraction, generation, improvement,
-ATS optimization, chat editing, version management, and file upload.
+FastAPI router for AI Studio endpoints.
+Includes model routing, prompt execution, Pydantic response validation,
+and graceful error handling.
 """
 
 import json
-from typing import List, Optional
+import logging
+from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.database import get_db
-from app.core.security import get_current_user_id
-from app.services import resume_ai_service
+from app.services import resume_ai_service, pdf_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 
-# ── Request/Response Schemas ───────────────────────────────────────────────────
-
+# ── Request Schemas ────────────────────────────────────────────────────────────
 class ExtractTextRequest(BaseModel):
     text: str
 
-
-class GenerateResumeRequest(BaseModel):
-    resume_data: dict
-    target_role: Optional[str] = ""
-    job_description: Optional[str] = ""
-    tone: Optional[str] = "Professional"
-
-
-class ImproveResumeRequest(BaseModel):
-    resume_data: dict
-
-
-class EditSectionRequest(BaseModel):
-    section: str
-    content: object
-    instruction: str
-    resume_context: dict
-
+class AnalyzeRequest(BaseModel):
+    resume_data: Dict[str, Any]
 
 class ATSRequest(BaseModel):
-    resume_data: dict
+    resume_data: Dict[str, Any]
     job_description: Optional[str] = ""
 
-
-class AnalyzeJobRequest(BaseModel):
+class JobMatchRequest(BaseModel):
+    resume_data: Dict[str, Any]
     job_description: str
 
+class TailorRequest(BaseModel):
+    resume_data: Dict[str, Any]
+    job_description: str
+
+class GenerateRequest(BaseModel):
+    resume_data: Optional[Dict[str, Any]] = None
+    target_role: Optional[str] = "Software Engineer"
+    user_profile: Optional[Dict[str, Any]] = None
+
+class SkillsRequest(BaseModel):
+    resume_data: Dict[str, Any]
+    target_role: Optional[str] = ""
+    job_description: Optional[str] = ""
+
+class BulletRequest(BaseModel):
+    bullet: str
+    mode: Optional[str] = "professional"
+
+class ImproveRequest(BaseModel):
+    resume_data: Dict[str, Any]
 
 class ChatRequest(BaseModel):
     message: str
-    resume_data: dict
-    chat_history: Optional[List[dict]] = []
-    selected_section: Optional[str] = None
+    resume_data: Dict[str, Any]
+    chat_history: Optional[List[Dict[str, Any]]] = []
 
 
-class ScoreRequest(BaseModel):
-    resume_data: dict
-    target_role: Optional[str] = ""
-
-
-class SuggestionsRequest(BaseModel):
-    resume_data: dict
-
-
-class VersionSaveRequest(BaseModel):
-    resume_data: dict
-    version_label: str
-    user_id: Optional[str] = "local"
-
-
-class VersionRestoreRequest(BaseModel):
-    version_index: int
-    user_id: Optional[str] = "local"
-
-
-class ApplyRequest(BaseModel):
-    resume_data: dict
-
-
-# ── In-memory version store (per session — use DB for production) ──────────────
-_version_store: dict[str, list] = {}
-
-
-def _get_user_id(current_user_id: str = Depends(get_current_user_id)) -> str:
-    return current_user_id
-
-
-# ── Helper to return graceful fallback when AI key is missing ─────────────────
-def _ai_unavailable_response(feature: str):
-    return JSONResponse(
-        status_code=200,
-        content={
-            "success": False,
-            "error": "ai_not_configured",
-            "message": f"AI feature '{feature}' requires GEMINI_API_KEY in .env. "
-                       "Set AI_PROVIDER=gemini and add your GEMINI_API_KEY to enable this feature.",
-            "demo_mode": True
-        }
+# ── Helper for Error Handling ──────────────────────────────────────────────────
+def _handle_ai_exception(feature: str, exc: Exception):
+    logger.error(f"[AI Studio Route Error] Task='{feature}': {exc}", exc_info=True)
+    if "GEMINI_API_KEY" in str(exc):
+        return JSONResponse(
+            status_code=400,
+            content={
+                "success": False,
+                "error": "gemini_api_key_missing",
+                "message": "AI service is not configured. Please set GEMINI_API_KEY in backend .env file.",
+            }
+        )
+    raise HTTPException(
+        status_code=500,
+        detail="AI service is temporarily unavailable. Please try again later."
     )
 
 
-# ── 1. Extract from Uploaded File ─────────────────────────────────────────────
-@router.post("/upload", summary="Upload PDF or DOCX and extract resume data")
-async def upload_resume_file(
-    file: UploadFile = File(...),
-    current_user_id: str = Depends(get_current_user_id),
-):
-    """
-    Upload a PDF or DOCX resume file.
-    Extracts text and returns structured resume data.
-    """
-    from app.core.config import settings
-    if not settings.GEMINI_API_KEY:
-        return _ai_unavailable_response("file-upload-extract")
-
-    if not file.filename:
-        raise HTTPException(status_code=400, detail="No file provided.")
-
-    filename_lower = file.filename.lower()
-    file_bytes = await file.read()
-
+# ── 1. Resume Parsing / Upload Endpoints ─────────────────────────────────────
+@router.post("/parse-resume")
+@router.post("/extract-text")
+def parse_resume_text(req: ExtractTextRequest):
     try:
-        if filename_lower.endswith(".pdf"):
-            text = resume_ai_service.extract_text_from_pdf(file_bytes)
-        elif filename_lower.endswith(".docx") or filename_lower.endswith(".doc"):
-            text = resume_ai_service.extract_text_from_docx(file_bytes)
+        data = resume_ai_service.extract_resume_data(req.text)
+        return {"success": True, "resume_data": data}
+    except Exception as e:
+        return _handle_ai_exception("parse_resume", e)
+
+@router.post("/upload")
+async def upload_and_parse_resume(file: UploadFile = File(...)):
+    try:
+        content = await file.read()
+        filename = file.filename.lower()
+        extracted_text = ""
+        
+        if filename.endswith(".pdf"):
+            extracted_text = pdf_service.extract_text_from_pdf(content)
+        elif filename.endswith(".docx") or filename.endswith(".doc"):
+            extracted_text = pdf_service.extract_text_from_docx(content)
+        elif filename.endswith(".txt"):
+            extracted_text = content.decode("utf-8", errors="ignore")
         else:
-            raise HTTPException(
-                status_code=400,
-                detail="Unsupported file format. Please upload a PDF or DOCX file."
-            )
+            raise HTTPException(status_code=400, detail="Unsupported file format. Please upload PDF, DOCX, DOC, or TXT.")
 
-        if not text.strip():
-            raise HTTPException(status_code=422, detail="Could not extract text from the uploaded file.")
+        if not extracted_text.strip():
+            # Emergency raw decode fallback
+            extracted_text = content.decode("latin1", errors="ignore")
+            # Strip non-printable ascii
+            import re
+            extracted_text = re.sub(r'[^\x20-\x7E\n\r\t]', ' ', extracted_text)
+            extracted_text = " ".join(extracted_text.split())
 
-        extracted = resume_ai_service.extract_resume_data(text)
-        return {"success": True, "extracted_text": text[:500], "resume_data": extracted}
+        if not extracted_text.strip() or len(extracted_text.strip()) < 10:
+            raise HTTPException(status_code=400, detail="Could not extract readable text from file. Please make sure the file contains selectable text.")
 
+        data = resume_ai_service.extract_resume_data(extracted_text)
+        return {"success": True, "filename": file.filename, "resume_data": data}
     except HTTPException:
         raise
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Extraction failed: {str(e)}")
+        return _handle_ai_exception("upload_and_parse", e)
 
 
-# ── 2. Extract from Pasted Text ────────────────────────────────────────────────
-@router.post("/extract", summary="Extract resume data from pasted text")
-def extract_from_text(
-    request: ExtractTextRequest,
-    current_user_id: str = Depends(get_current_user_id),
-):
-    """Parse pasted resume text into structured CareerAI resume schema."""
-    from app.core.config import settings
-    if not settings.GEMINI_API_KEY:
-        return _ai_unavailable_response("extract")
-
-    if len(request.text.strip()) < 50:
-        raise HTTPException(status_code=400, detail="Text is too short to extract resume data.")
-
+# ── 2. Resume Analysis Endpoints ──────────────────────────────────────────────
+@router.post("/analyze")
+@router.post("/analyze-resume")
+def analyze_resume(req: AnalyzeRequest):
     try:
-        extracted = resume_ai_service.extract_resume_data(request.text)
-        return {"success": True, "resume_data": extracted}
+        res = resume_ai_service.analyze_resume_deep(req.resume_data)
+        return res
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Extraction failed: {str(e)}")
+        return _handle_ai_exception("analyze_resume", e)
 
 
-# ── 3. Generate Polished Resume ────────────────────────────────────────────────
-@router.post("/generate", summary="Generate AI-improved resume from structured data")
-def generate_resume(
-    request: GenerateResumeRequest,
-    current_user_id: str = Depends(get_current_user_id),
-):
-    """
-    Take structured resume data and return an AI-improved version.
-    Tailored to target role and optionally to job description.
-    """
-    from app.core.config import settings
-    if not settings.GEMINI_API_KEY:
-        return _ai_unavailable_response("generate")
-
+# ── 3. ATS Score Analyzer Endpoints ───────────────────────────────────────────
+@router.post("/ats")
+@router.post("/ats-analysis")
+def analyze_ats(req: ATSRequest):
     try:
-        improved = resume_ai_service.generate_resume(
-            data=request.resume_data,
-            target_role=request.target_role or "",
-            job_description=request.job_description or "",
-            tone=request.tone or "Professional"
+        res = resume_ai_service.ats_score_analyzer(req.resume_data, req.job_description or "")
+        return res
+    except Exception as e:
+        return _handle_ai_exception("ats_analysis", e)
+
+
+# ── 4. Job Description Matching Endpoints ─────────────────────────────────────
+@router.post("/match-job")
+@router.post("/job-match")
+def match_job_description(req: JobMatchRequest):
+    try:
+        res = resume_ai_service.job_description_matching(req.resume_data, req.job_description)
+        return res
+    except Exception as e:
+        return _handle_ai_exception("job_matching", e)
+
+
+# ── 5. Resume Tailoring Endpoints ─────────────────────────────────────────────
+@router.post("/tailor")
+@router.post("/tailor-resume")
+def tailor_resume(req: TailorRequest):
+    try:
+        res = resume_ai_service.tailor_resume(req.resume_data, req.job_description)
+        return res
+    except Exception as e:
+        return _handle_ai_exception("resume_tailoring", e)
+
+
+# ── 6. Resume Generation Endpoints ────────────────────────────────────────────
+@router.post("/generate")
+@router.post("/generate-resume")
+def generate_resume(req: GenerateRequest):
+    try:
+        profile = req.user_profile or req.resume_data or {}
+        res = resume_ai_service.generate_resume(profile, req.target_role or "Software Engineer")
+        return res
+    except Exception as e:
+        return _handle_ai_exception("resume_generation", e)
+
+
+# ── 7. Skills Recommendations Endpoints ───────────────────────────────────────
+@router.post("/skills-recommendations")
+@router.post("/skills")
+def recommend_skills(req: SkillsRequest):
+    try:
+        res = resume_ai_service.skills_recommendations(
+            req.resume_data,
+            target_role=req.target_role or "",
+            job_description=req.job_description or "",
         )
-        return {"success": True, "resume_data": improved}
+        return res
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Generation failed: {str(e)}")
+        return _handle_ai_exception("skills_recommendation", e)
 
 
-# ── 4. Improve Existing Resume ─────────────────────────────────────────────────
-@router.post("/improve", summary="General AI improvement pass on full resume")
-def improve_resume(
-    request: ImproveResumeRequest,
-    current_user_id: str = Depends(get_current_user_id),
-):
-    """Apply a general improvement pass: wording, grammar, impact verbs."""
-    from app.core.config import settings
-    if not settings.GEMINI_API_KEY:
-        return _ai_unavailable_response("improve")
-
+# ── 8. Bullet Point Improvement Endpoint ──────────────────────────────────────
+@router.post("/improve-bullet")
+def improve_bullet(req: BulletRequest):
     try:
-        improved = resume_ai_service.improve_resume(request.resume_data)
-        return {"success": True, "resume_data": improved}
+        res = resume_ai_service.improve_bullet_points(req.bullet, req.mode or "professional")
+        return res
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Improvement failed: {str(e)}")
+        return _handle_ai_exception("bullet_improvement", e)
 
 
-# ── 5. Edit a Specific Section ─────────────────────────────────────────────────
-@router.post("/edit", summary="Edit a specific resume section with AI instruction")
-def edit_section(
-    request: EditSectionRequest,
-    current_user_id: str = Depends(get_current_user_id),
-):
-    """Apply a specific natural language instruction to one section."""
-    from app.core.config import settings
-    if not settings.GEMINI_API_KEY:
-        return _ai_unavailable_response("edit-section")
-
+# ── 9. Grammar / Resume Improvement Endpoints ─────────────────────────────────
+@router.post("/improve")
+@router.post("/improve-resume")
+def improve_resume(req: ImproveRequest):
     try:
-        updated = resume_ai_service.rewrite_section(
-            section=request.section,
-            content=request.content,
-            instruction=request.instruction,
-            context=request.resume_context
+        res = resume_ai_service.grammar_and_format_improvement(req.resume_data)
+        return res
+    except Exception as e:
+        return _handle_ai_exception("grammar_improvement", e)
+
+
+# ── 10. Contextual Resume AI Chat Endpoint ───────────────────────────────────
+@router.post("/chat")
+def resume_ai_chat(req: ChatRequest):
+    try:
+        res = resume_ai_service.resume_ai_chat(
+            resume_data=req.resume_data,
+            message=req.message,
+            chat_history=req.chat_history or [],
         )
-        return {"success": True, "section": request.section, "updated_content": updated}
+        return res
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Section edit failed: {str(e)}")
-
-
-# ── 6. ATS Optimization ────────────────────────────────────────────────────────
-@router.post("/ats", summary="Analyze resume for ATS compatibility")
-def ats_optimization(
-    request: ATSRequest,
-    current_user_id: str = Depends(get_current_user_id),
-):
-    """Score resume for ATS compatibility and return keyword analysis."""
-    from app.core.config import settings
-    if not settings.GEMINI_API_KEY:
-        return _ai_unavailable_response("ats")
-
-    try:
-        result = resume_ai_service.optimize_for_ats(
-            data=request.resume_data,
-            job_description=request.job_description or ""
-        )
-        return {"success": True, **result}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"ATS analysis failed: {str(e)}")
-
-
-# ── 7. Analyze Job Description ────────────────────────────────────────────────
-@router.post("/analyze-job", summary="Extract key requirements from a job description")
-def analyze_job(
-    request: AnalyzeJobRequest,
-    current_user_id: str = Depends(get_current_user_id),
-):
-    """Parse a job description into structured requirements."""
-    from app.core.config import settings
-    if not settings.GEMINI_API_KEY:
-        return _ai_unavailable_response("analyze-job")
-
-    try:
-        result = resume_ai_service.analyze_job_description(request.job_description)
-        return {"success": True, **result}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Job analysis failed: {str(e)}")
-
-
-# ── 8. Chat Edit ───────────────────────────────────────────────────────────────
-@router.post("/chat", summary="Chat-based resume editing with natural language")
-def chat_edit(
-    request: ChatRequest,
-    current_user_id: str = Depends(get_current_user_id),
-):
-    """
-    Process a natural language editing command and return updated resume.
-    Maintains conversation context via chat_history.
-    """
-    from app.core.config import settings
-    if not settings.GEMINI_API_KEY:
-        return _ai_unavailable_response("chat")
-
-    try:
-        result = resume_ai_service.chat_edit_resume(
-            message=request.message,
-            resume_data=request.resume_data,
-            chat_history=request.chat_history or [],
-            selected_section=request.selected_section
-        )
-        return {"success": True, **result}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Chat edit failed: {str(e)}")
-
-
-# ── 9. Score Resume ────────────────────────────────────────────────────────────
-@router.post("/score", summary="Get multi-dimensional resume scores")
-def score_resume(
-    request: ScoreRequest,
-    current_user_id: str = Depends(get_current_user_id),
-):
-    """Score the resume across: Overall, ATS, Content, Impact, Readability, Professionalism."""
-    from app.core.config import settings
-    if not settings.GEMINI_API_KEY:
-        # Return demo scores when AI is not configured
-        return {
-            "success": True,
-            "demo_mode": True,
-            "overall_score": 72,
-            "ats_score": 68,
-            "content_score": 75,
-            "impact_score": 65,
-            "readability_score": 80,
-            "professionalism_score": 74,
-            "keyword_match_score": 60,
-            "summary": "Good foundation — needs stronger action verbs and quantified achievements.",
-            "top_strengths": ["Clear formatting", "Relevant skills listed", "Education details complete"],
-            "improvement_areas": ["Professional summary", "Experience impact descriptions"]
-        }
-
-    try:
-        result = resume_ai_service.score_resume(
-            data=request.resume_data,
-            target_role=request.target_role or ""
-        )
-        return {"success": True, **result}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Scoring failed: {str(e)}")
-
-
-# ── 10. Generate Suggestions ───────────────────────────────────────────────────
-@router.post("/suggestions", summary="Get improvement suggestions for the resume")
-def get_suggestions(
-    request: SuggestionsRequest,
-    current_user_id: str = Depends(get_current_user_id),
-):
-    """Return prioritized list of actionable improvement suggestions."""
-    from app.core.config import settings
-    if not settings.GEMINI_API_KEY:
-        return {
-            "success": True,
-            "demo_mode": True,
-            "suggestions": [
-                {"id": "1", "section": "summary", "priority": "high", "issue": "Summary is too generic", "suggestion": "Add specific technologies and quantified impact", "fix_prompt": "Rewrite summary with specific technologies and measurable achievements"},
-                {"id": "2", "section": "experience", "priority": "high", "issue": "Descriptions lack impact", "suggestion": "Start each bullet with a strong action verb", "fix_prompt": "Rewrite experience descriptions using strong action verbs and quantified results"},
-                {"id": "3", "section": "projects", "priority": "medium", "issue": "Missing technical detail", "suggestion": "Describe the problem solved and technical approach", "fix_prompt": "Improve project descriptions to highlight technical challenges and solutions"},
-                {"id": "4", "section": "skills", "priority": "low", "issue": "Skills not categorized", "suggestion": "Group skills by category for better readability", "fix_prompt": "Reorganize skills into clear categories"},
-            ]
-        }
-
-    try:
-        suggestions = resume_ai_service.generate_resume_suggestions(request.resume_data)
-        return {"success": True, "suggestions": suggestions}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Suggestions failed: {str(e)}")
-
-
-# ── 11. Save Version ───────────────────────────────────────────────────────────
-@router.post("/version", summary="Save a named version of the resume")
-def save_version(
-    request: VersionSaveRequest,
-    current_user_id: str = Depends(get_current_user_id),
-):
-    """Save the current resume state as a named version for restore later."""
-    user_key = current_user_id
-    if user_key not in _version_store:
-        _version_store[user_key] = []
-
-    _version_store[user_key].append({
-        "label": request.version_label,
-        "resume_data": request.resume_data,
-        "created_at": __import__("datetime").datetime.utcnow().isoformat()
-    })
-
-    return {
-        "success": True,
-        "version_index": len(_version_store[user_key]) - 1,
-        "total_versions": len(_version_store[user_key])
-    }
-
-
-# ── 12. Get Versions ───────────────────────────────────────────────────────────
-@router.get("/versions", summary="List all saved resume versions")
-def get_versions(current_user_id: str = Depends(get_current_user_id)):
-    """Return all saved versions for the current user (without full data)."""
-    user_key = current_user_id
-    versions = _version_store.get(user_key, [])
-    return {
-        "success": True,
-        "versions": [
-            {"index": i, "label": v["label"], "created_at": v["created_at"]}
-            for i, v in enumerate(versions)
-        ]
-    }
-
-
-# ── 13. Restore Version ────────────────────────────────────────────────────────
-@router.post("/restore", summary="Restore a saved version of the resume")
-def restore_version(
-    request: VersionRestoreRequest,
-    current_user_id: str = Depends(get_current_user_id),
-):
-    """Restore a previously saved resume version by index."""
-    user_key = current_user_id
-    versions = _version_store.get(user_key, [])
-
-    if request.version_index < 0 or request.version_index >= len(versions):
-        raise HTTPException(status_code=404, detail="Version not found.")
-
-    version = versions[request.version_index]
-    return {"success": True, "resume_data": version["resume_data"], "label": version["label"]}
-
-
-# ── 14. Apply to Builder ───────────────────────────────────────────────────────
-@router.post("/apply", summary="Apply AI-generated resume to the manual builder")
-def apply_to_builder(
-    request: ApplyRequest,
-    current_user_id: str = Depends(get_current_user_id),
-):
-    """
-    Validates the AI-generated resume data and returns it ready
-    for the frontend to save to localStorage and navigate to the builder.
-    """
-    data = request.resume_data
-
-    # Basic validation
-    required_keys = ["personal", "summary", "education", "experience", "projects", "skills"]
-    for key in required_keys:
-        if key not in data:
-            data[key] = [] if key != "personal" and key != "summary" else ({} if key == "personal" else "")
-
-    return {"success": True, "resume_data": data, "redirect_to": "/resume/builder"}
+        return _handle_ai_exception("resume_chat", e)

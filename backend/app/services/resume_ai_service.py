@@ -1,122 +1,173 @@
 """
 app/services/resume_ai_service.py
 ──────────────────────────────────
-Gemini AI integration for resume creation, improvement, extraction,
-ATS optimization, scoring, and chat-based editing.
+Gemini AI integration for resume creation, analysis, ATS optimization,
+job description matching, resume tailoring, generation, skills recommendation,
+bullet point improvement, grammar check, and contextual AI chat.
 
-All Gemini calls return strictly validated JSON.
-Safety guarantee: AI is explicitly instructed to NEVER invent
-experience, companies, degrees, skills, or certifications.
+Uses gemini_service.py for task-based model routing (Fast vs Pro models).
+All outputs are strictly validated using Pydantic schemas in app/schemas/ai_studio.py.
+
+CRITICAL SAFETY DIRECTIVE:
+AI MUST NEVER fabricate experience, employers, job titles, degrees, skills,
+certifications, achievements, metrics, or statistics.
 """
 
-import httpx
 import json
-import io
-from typing import List, Optional, Any
-from app.core.config import settings
+import logging
+from typing import Dict, Any, List, Optional
+from app.services.gemini_service import call_gemini_api, clean_and_parse_json
+from app.schemas.ai_studio import (
+    ResumeParseResponse,
+    ResumeAnalysisResponse,
+    ATSAnalysisResponse,
+    JobMatchResponse,
+    ResumeTailorResponse,
+    ResumeGenerateResponse,
+    SkillsRecommendationResponse,
+    BulletImprovementResponse,
+    GrammarImprovementResponse,
+    ResumeChatResponse,
+)
 
-GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+logger = logging.getLogger(__name__)
 
 
-# ── Internal Gemini Helper ──────────────────────────────────────────────────────
+# ── Backward Compatibility Helpers ──────────────────────────────────────────────
 def _call_gemini(prompt: str, json_mode: bool = True) -> str:
-    """POST to Gemini API and return raw text response."""
-    if not settings.GEMINI_API_KEY:
-        raise ValueError("GEMINI_API_KEY is not configured in .env")
-
-    headers = {"Content-Type": "application/json"}
-    params = {"key": settings.GEMINI_API_KEY}
-    payload: dict = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {
-            "temperature": 0.3,
-            "maxOutputTokens": 8192,
-        },
-    }
-    if json_mode:
-        payload["generationConfig"]["responseMimeType"] = "application/json"
-
-    response = httpx.post(
-        GEMINI_API_URL, headers=headers, params=params, json=payload, timeout=45.0
-    )
-    response.raise_for_status()
-    data = response.json()
-    candidates = data.get("candidates", [])
-    if not candidates:
-        raise ValueError("Gemini returned no candidates.")
-    parts = candidates[0].get("content", {}).get("parts", [])
-    if not parts:
-        raise ValueError("Gemini returned empty parts.")
-    return parts[0].get("text", "")
+    """Backward compatibility helper wrapping gemini_service."""
+    return call_gemini_api(prompt=prompt, task="job_matching", json_mode=json_mode)
 
 
 def _parse_json(raw: str) -> dict:
-    """Parse JSON response from Gemini, stripping markdown fences if present."""
-    cleaned = raw.strip()
-    if cleaned.startswith("```"):
-        lines = cleaned.split("\n")
-        cleaned = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
-    return json.loads(cleaned)
+    """Backward compatibility helper wrapping clean_and_parse_json."""
+    return clean_and_parse_json(raw)
 
-
-# ── Resume Schema Template ─────────────────────────────────────────────────────
-RESUME_SCHEMA = {
-    "personal": {
-        "fullName": "", "title": "", "email": "", "phone": "",
-        "location": "", "linkedin": "", "github": "", "portfolio": "", "profileImage": ""
-    },
-    "summary": "",
-    "education": [],
-    "experience": [],
-    "projects": [],
-    "skills": [],
-    "certifications": [],
-    "achievements": [],
-    "languages": []
-}
-
+# ── Safety Preamble ─────────────────────────────────────────────────────────────
 SAFETY_PREAMBLE = """
 CRITICAL SAFETY RULE: You MUST NOT invent, fabricate, or add any of the following:
 - Companies, employers, or organizations
-- Job titles or roles the person did not mention
+- Job titles or roles the person did not hold or mention
 - Degrees, universities, or academic credentials
-- Skills, technologies, or tools not mentioned
+- Skills, technologies, or tools not mentioned by the user
 - Certifications not mentioned
 - Projects, repositories, or work not mentioned
-- Achievements, awards, or competitions not mentioned
-- Any dates, numbers, or statistics not explicitly provided
+- Achievements, awards, metrics, or numbers not explicitly provided (do NOT invent percentage increases, e.g. "improved speed by 40%", unless provided!)
 
 You may ONLY: rewrite, rephrase, improve clarity, fix grammar, use stronger action verbs,
-improve formatting, and make descriptions more concise or impactful.
-If a section is empty or not mentioned, leave it empty in your output.
+improve formatting, and make descriptions more concise, professional, or impact-oriented.
+If a section is empty or missing, leave it empty in your output.
 """
 
 
-# ── 1. Extract Resume Data from Text ──────────────────────────────────────────
-def extract_resume_data(text: str) -> dict:
+def _prune_resume_context(resume_data: Dict[str, Any], max_bullets_per_exp: int = 6) -> Dict[str, Any]:
     """
-    Parse raw resume text (from PDF/DOCX or paste) into structured JSON
-    matching CareerAI's resume schema.
+    Context Management Helper:
+    Trims unnecessarily large resume structures before sending to Gemini API,
+    keeping only essential text for token efficiency.
     """
+    if not isinstance(resume_data, dict):
+        return {}
+
+    personal = resume_data.get("personal", {})
+    pruned_personal = {
+        "fullName": personal.get("fullName", ""),
+        "title": personal.get("title", ""),
+        "location": personal.get("location", ""),
+    }
+
+    # Summary
+    summary = resume_data.get("summary", "")
+    if isinstance(summary, str) and len(summary) > 2000:
+        summary = summary[:2000]
+
+    # Experience
+    exp_list = []
+    for item in (resume_data.get("experience") or [])[:8]:
+        desc = item.get("description", "")
+        if isinstance(desc, str) and len(desc) > 1500:
+            desc = desc[:1500]
+        exp_list.append({
+            "company": item.get("company", ""),
+            "position": item.get("position", "") or item.get("role", ""),
+            "startDate": item.get("startDate", ""),
+            "endDate": item.get("endDate", ""),
+            "description": desc,
+        })
+
+    # Projects
+    proj_list = []
+    for item in (resume_data.get("projects") or [])[:6]:
+        proj_list.append({
+            "name": item.get("name", ""),
+            "technologies": item.get("technologies", ""),
+            "description": (item.get("description", "") or "")[:1000],
+        })
+
+    # Education
+    edu_list = []
+    for item in (resume_data.get("education") or [])[:4]:
+        edu_list.append({
+            "institution": item.get("institution", "") or item.get("school", ""),
+            "degree": item.get("degree", ""),
+            "fieldOfStudy": item.get("fieldOfStudy", ""),
+        })
+
+    # Skills
+    skills_raw = resume_data.get("skills", [])
+    skills_list = []
+    if isinstance(skills_raw, list):
+        for s in skills_raw[:40]:
+            if isinstance(s, dict):
+                skills_list.append(s.get("name", ""))
+            elif isinstance(s, str):
+                skills_list.append(s)
+
+    return {
+        "personal": pruned_personal,
+        "summary": summary,
+        "experience": exp_list,
+        "projects": proj_list,
+        "education": edu_list,
+        "skills": skills_list,
+        "certifications": resume_data.get("certifications", [])[:5],
+        "achievements": resume_data.get("achievements", [])[:5],
+    }
+
+
+# ── 1. Resume Parsing (Fast Model) ───────────────────────────────────────────
+def extract_resume_data(text: str) -> Dict[str, Any]:
+    """
+    Parse raw resume text (PDF, DOCX, TXT) into structured JSON.
+    Task: resume_parsing -> GEMINI_FAST_MODEL
+    """
+    if len(text) > 15000:
+        text = text[:15000]
+
     prompt = f"""
-You are a resume parser. Extract structured information from the following resume text.
+You are a precision resume parser. Extract structured information from the following resume text.
 
 {SAFETY_PREAMBLE}
 
-Return ONLY valid JSON matching this exact schema:
+Resume Text:
+\"\"\"
+{text}
+\"\"\"
+
+Return ONLY valid JSON matching this exact structure:
 {{
   "personal": {{
     "fullName": "string",
-    "title": "string (professional title/role)",
+    "title": "string",
     "email": "string",
     "phone": "string",
     "location": "string",
-    "linkedin": "string (URL or handle)",
-    "github": "string (URL or handle)",
-    "portfolio": "string (URL)",
+    "linkedin": "string",
+    "github": "string",
+    "portfolio": "string",
     "profileImage": ""
   }},
-  "summary": "string (professional summary paragraph)",
+  "summary": "string",
   "education": [
     {{
       "id": "1",
@@ -141,23 +192,23 @@ Return ONLY valid JSON matching this exact schema:
       "description": "string"
     }}
   ],
+  "internships": [],
   "projects": [
     {{
       "id": "1",
       "name": "string",
       "description": "string",
-      "technologies": "string (comma-separated)",
+      "technologies": "string",
       "githubUrl": "string",
-      "liveUrl": "string",
-      "startDate": "string",
-      "endDate": "string"
+      "liveUrl": "string"
     }}
   ],
   "skills": [
     {{
       "id": "1",
       "name": "string",
-      "category": "Programming Languages|Frameworks|Databases|Machine Learning|Tools|Cloud|Other"
+      "category": "Technical",
+      "level": "Intermediate"
     }}
   ],
   "certifications": [
@@ -166,446 +217,487 @@ Return ONLY valid JSON matching this exact schema:
       "name": "string",
       "issuer": "string",
       "issueDate": "string",
-      "credentialUrl": "string",
-      "description": "string"
+      "credentialUrl": "string"
     }}
   ],
   "achievements": [
     {{
       "id": "1",
       "title": "string",
-      "organization": "string",
-      "date": "string",
-      "description": "string"
+      "description": "string",
+      "date": "string"
     }}
   ],
-  "languages": []
+  "languages": [],
+  "links": []
 }}
-
-Resume text to parse:
----
-{text}
----
-
-Return ONLY the JSON, no explanation, no markdown.
 """
-    raw = _call_gemini(prompt, json_mode=True)
-    data = _parse_json(raw)
-    # Add sequential IDs to arrays
-    for section in ["education", "experience", "projects", "skills", "certifications", "achievements"]:
-        items = data.get(section, [])
-        for i, item in enumerate(items):
-            item["id"] = str(i + 1)
-    return data
+    raw = call_gemini_api(prompt=prompt, task="resume_parsing", json_mode=True)
+    parsed = clean_and_parse_json(raw)
+    validated = ResumeParseResponse(**parsed)
+    return validated.model_dump()
 
 
-# ── 2. Generate Polished Resume ────────────────────────────────────────────────
-def generate_resume(
-    data: dict,
-    target_role: str = "",
-    job_description: str = "",
-    tone: str = "Professional"
-) -> dict:
+# ── 2. Resume Analysis (Pro Model) ───────────────────────────────────────────
+def analyze_resume_deep(resume_data: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Take structured resume data and return an AI-improved version.
-    Gemini will improve wording, grammar, impact, and tailor to target role.
-    It MUST NOT add any fabricated information.
+    In-depth AI resume quality and content analysis.
+    Task: resume_analysis -> GEMINI_PRO_MODEL
     """
-    context = f"Target Role: {target_role}" if target_role else ""
-    job_context = f"\nJob Description for tailoring:\n{job_description[:2000]}" if job_description else ""
+    pruned = _prune_resume_context(resume_data)
 
     prompt = f"""
-You are an expert resume writer. Improve the following resume data to be more professional,
-impactful, and ATS-friendly. Tone: {tone}.
-{context}
-{job_context}
+You are an expert career counselor and senior hiring manager. Perform an in-depth analysis of this resume.
 
 {SAFETY_PREAMBLE}
 
-Improvement guidelines:
-- Use strong action verbs (Led, Developed, Architected, Optimized, Implemented, Delivered)
-- Make bullet points concise and impact-focused
-- Improve the professional summary to be compelling and role-focused
-- Ensure skill names use industry-standard terminology
-- Fix any grammar or phrasing issues
-- Make project descriptions highlight technical impact
-- Do NOT add skills, experience, or certifications not in the original data
+Resume Content:
+{json.dumps(pruned, indent=2)}
 
-Input resume data (JSON):
-{json.dumps(data, indent=2)}
+Evaluate:
+- Content quality and clarity
+- Resume structure and formatting
+- Professional summary impact
+- Work experience details & bullet strength
+- Projects & technical showcase
+- Skills completeness & relevance
+- Education & Certifications
+- Grammar, tone, & impact
 
-Return ONLY the improved resume data as valid JSON in the exact same schema as the input.
-Do NOT add new fields. Do NOT remove existing sections that have data.
-"""
-    raw = _call_gemini(prompt, json_mode=True)
-    return _parse_json(raw)
-
-
-# ── 3. Improve Entire Resume ───────────────────────────────────────────────────
-def improve_resume(data: dict) -> dict:
-    """General improvement pass on the entire resume."""
-    return generate_resume(data, target_role="", job_description="", tone="Professional")
-
-
-# ── 4. Rewrite a Specific Section ─────────────────────────────────────────────
-def rewrite_section(
-    section: str,
-    content: Any,
-    instruction: str,
-    context: dict
-) -> Any:
-    """
-    Apply a specific instruction to a single resume section.
-    Returns only the updated section content.
-    """
-    prompt = f"""
-You are an expert resume editor. Apply the following instruction to this specific resume section.
-
-{SAFETY_PREAMBLE}
-
-Section: {section}
-Current content:
-{json.dumps(content, indent=2)}
-
-Instruction from user: "{instruction}"
-
-Full resume context (for tone consistency):
-Name: {context.get('personal', {}).get('fullName', '')}
-Role: {context.get('personal', {}).get('title', '')}
-
-Return ONLY the updated section content as valid JSON in the same structure as the input.
-Do not include any explanation or markdown. Just the updated JSON value.
-"""
-    raw = _call_gemini(prompt, json_mode=True)
-    return _parse_json(raw) if raw.strip().startswith("{") or raw.strip().startswith("[") else raw.strip()
-
-
-# ── 5. Generate Professional Summary ──────────────────────────────────────────
-def generate_summary(data: dict, target_role: str = "") -> str:
-    """Generate a compelling professional summary based on resume data."""
-    prompt = f"""
-Write a professional resume summary (2-3 sentences, max 60 words) for the following person.
-
-{SAFETY_PREAMBLE}
-
-Target Role: {target_role or data.get('personal', {}).get('title', 'Professional')}
-Name: {data.get('personal', {}).get('fullName', '')}
-Experience: {json.dumps(data.get('experience', []), indent=2)}
-Skills: {json.dumps([s.get('name') for s in data.get('skills', [])], indent=2)}
-Education: {json.dumps(data.get('education', []), indent=2)}
-Projects: {json.dumps([p.get('name') for p in data.get('projects', [])], indent=2)}
-
-Return ONLY a JSON object: {{"summary": "the generated summary text"}}
-"""
-    raw = _call_gemini(prompt, json_mode=True)
-    result = _parse_json(raw)
-    return result.get("summary", "")
-
-
-# ── 6. Optimize for ATS ────────────────────────────────────────────────────────
-def optimize_for_ats(data: dict, job_description: str = "") -> dict:
-    """
-    Analyze resume against job description for ATS compatibility.
-    Returns score, matched keywords, missing keywords, and suggestions.
-    Does NOT add fabricated skills.
-    """
-    prompt = f"""
-You are an ATS (Applicant Tracking System) expert. Analyze this resume against the job description.
-
-{SAFETY_PREAMBLE}
-
-Resume data:
-{json.dumps(data, indent=2)}
-
-Job description:
-{job_description[:3000] if job_description else "No job description provided. Analyze for general ATS best practices."}
-
-Return ONLY valid JSON:
+Return ONLY valid JSON matching this exact structure:
 {{
-  "ats_score": 0-100,
-  "overall_score": 0-100,
-  "content_score": 0-100,
-  "impact_score": 0-100,
-  "readability_score": 0-100,
-  "professionalism_score": 0-100,
-  "matched_keywords": ["keyword1", "keyword2"],
-  "missing_keywords": [
+  "overall_score": 85,
+  "content_score": 82,
+  "structure_score": 88,
+  "ats_score": 80,
+  "skills_score": 84,
+  "experience_score": 86,
+  "project_score": 80,
+  "grammar_score": 90,
+  "quality_grade": "A-",
+  "summary_text": "Executive summary of the candidate's resume strengths and overall quality...",
+  "strengths": [
+    "Clear, structured experience section",
+    "Strong technical skills matching modern role requirements"
+  ],
+  "weaknesses": [
+    "Summary could highlight core leadership strengths better",
+    "Some project descriptions lack action verbs"
+  ],
+  "recommendations": [
     {{
-      "keyword": "Docker",
-      "reason": "Job description requires Docker but resume does not mention it",
-      "add_if_you_have": true
+      "section": "Summary",
+      "priority": "high",
+      "action": "Add a clear statement of your key target role and top technical competencies."
     }}
-  ],
-  "weak_sections": ["summary", "experience"],
-  "suggestions": [
+  ]
+}}
+"""
+    raw = call_gemini_api(prompt=prompt, task="resume_analysis", json_mode=True)
+    parsed = clean_and_parse_json(raw)
+    validated = ResumeAnalysisResponse(**parsed)
+    return validated.model_dump()
+
+
+# ── 3. ATS Score Analyzer (Fast Model) ───────────────────────────────────────
+def ats_score_analyzer(resume_data: Dict[str, Any], job_description: str = "") -> Dict[str, Any]:
+    """
+    AI-based ATS compatibility estimate.
+    Task: ats_analysis -> GEMINI_FAST_MODEL
+    """
+    pruned = _prune_resume_context(resume_data)
+    jd_clean = (job_description or "")[:4000]
+
+    prompt = f"""
+You are an ATS (Applicant Tracking System) optimization expert. Evaluate this resume's ATS compatibility.
+
+{SAFETY_PREAMBLE}
+
+Resume Data:
+{json.dumps(pruned, indent=2)}
+
+Target Job Description (if provided):
+\"\"\"
+{jd_clean if jd_clean else "General tech/software industry standard ATS rules"}
+\"\"\"
+
+Analyze section headings, formatting text, keywords, skill density, bullet points, and readability.
+
+Return ONLY valid JSON matching this structure:
+{{
+  "ats_score": 82,
+  "keyword_score": 80,
+  "structure_score": 85,
+  "readability_score": 88,
+  "section_completeness": 90,
+  "issues": [
     {{
-      "section": "summary",
-      "issue": "Summary is too generic",
-      "fix": "Make it role-specific with key technologies",
-      "priority": "high"
+      "severity": "medium",
+      "section": "Experience",
+      "issue": "Missing standard industry keywords for target role."
     }}
   ],
-  "improved_resume": null
+  "recommendations": [
+    {{
+      "priority": "high",
+      "section": "Skills",
+      "fix": "Include exact skill name variations (e.g., React.js alongside React)."
+    }}
+  ],
+  "disclaimer": "AI-based ATS compatibility estimate"
 }}
-
-CRITICAL: For missing_keywords, only list keywords from the job description that are absent from the resume.
-Do NOT suggest adding skills the person doesn't have. The add_if_you_have field must always be true (never fabricate).
 """
-    raw = _call_gemini(prompt, json_mode=True)
-    return _parse_json(raw)
+    raw = call_gemini_api(prompt=prompt, task="ats_analysis", json_mode=True)
+    parsed = clean_and_parse_json(raw)
+    parsed["disclaimer"] = "AI-based ATS compatibility estimate"
+    validated = ATSAnalysisResponse(**parsed)
+    return validated.model_dump()
 
 
-# ── 7. Analyze Job Description ────────────────────────────────────────────────
-def analyze_job_description(job_description: str) -> dict:
-    """Extract key requirements, skills, and keywords from a job description."""
+# ── 4. Job Description Matching (Fast Model) ─────────────────────────────────
+def job_description_matching(resume_data: Dict[str, Any], job_description: str) -> Dict[str, Any]:
+    """
+    Compare resume against target job description.
+    Task: job_matching -> GEMINI_FAST_MODEL
+    """
+    pruned = _prune_resume_context(resume_data)
+    jd_clean = (job_description or "")[:5000]
+
     prompt = f"""
-Analyze this job description and extract structured information.
+You are a job matching AI analyzer. Compare the user's resume against the provided Job Description.
 
-Job Description:
-{job_description[:3000]}
+{SAFETY_PREAMBLE}
+
+User Resume:
+{json.dumps(pruned, indent=2)}
+
+Target Job Description:
+\"\"\"
+{jd_clean}
+\"\"\"
+
+IMPORTANT:
+Explicitly separate skills into:
+1. matching_skills: Skills the user ALREADY HAS in their resume.
+2. missing_skills: Skills requested in the JD that are NOT in the user's resume.
+3. suggested_skills: Additional relevant skills worth learning for this role.
+
+Do NOT automatically add missing skills to the resume.
 
 Return ONLY valid JSON:
 {{
-  "job_title": "string",
-  "company": "string or empty",
-  "required_skills": ["skill1", "skill2"],
-  "preferred_skills": ["skill1"],
-  "key_responsibilities": ["responsibility1"],
-  "experience_required": "string (e.g. 2+ years)",
-  "education_required": "string",
-  "keywords": ["keyword1", "keyword2"],
-  "tech_stack": ["technology1", "technology2"],
-  "soft_skills": ["communication", "teamwork"]
+  "overall_match": 78,
+  "skills_match": 75,
+  "keyword_match": 80,
+  "experience_match": 75,
+  "education_match": 85,
+  "matching_skills": ["Python", "FastAPI", "React"],
+  "missing_skills": ["Docker", "Kubernetes"],
+  "suggested_skills": ["AWS", "CI/CD"],
+  "matched_keywords": ["REST API", "SQL", "Git"],
+  "recommended_keywords": ["Microservices", "Containerization"],
+  "recommendations": [
+    "Highlight your FastAPI experience more prominently in your professional summary.",
+    "If you have Docker experience, make sure to list it."
+  ]
 }}
 """
-    raw = _call_gemini(prompt, json_mode=True)
-    return _parse_json(raw)
+    raw = call_gemini_api(prompt=prompt, task="job_matching", json_mode=True)
+    parsed = clean_and_parse_json(raw)
+    validated = JobMatchResponse(**parsed)
+    return validated.model_dump()
 
 
-# ── 8. Score Resume ────────────────────────────────────────────────────────────
-def score_resume(data: dict, target_role: str = "") -> dict:
-    """Score a resume across multiple dimensions."""
+# ── 5. Resume Tailoring (Pro Model) ──────────────────────────────────────────
+def tailor_resume(resume_data: Dict[str, Any], job_description: str) -> Dict[str, Any]:
+    """
+    Tailor resume content to target job description without inventing facts.
+    Task: resume_tailoring -> GEMINI_PRO_MODEL
+    """
+    pruned = _prune_resume_context(resume_data)
+    jd_clean = (job_description or "")[:5000]
+
     prompt = f"""
-Score this resume across multiple professional dimensions.
+You are a professional resume writer specializing in targeted resume optimization.
 
-Target Role: {target_role or data.get('personal', {}).get('title', 'Professional')}
+{SAFETY_PREAMBLE}
+NEVER invent missing companies, roles, degrees, dates, tools, or metrics!
 
-Resume:
-{json.dumps(data, indent=2)}
+Original Resume:
+{json.dumps(resume_data, indent=2)}
 
-Return ONLY valid JSON:
+Target Job Description:
+\"\"\"
+{jd_clean}
+\"\"\"
+
+Task:
+- Rewrite the professional summary to align with the target role and key JD themes.
+- Reorder and emphasize existing relevant skills.
+- Improve existing project and experience bullet point phrasing using relevant JD keywords.
+- Preserve all real names, dates, company titles, and facts.
+
+Return ONLY valid JSON matching this exact structure:
 {{
-  "overall_score": 0-100,
-  "ats_score": 0-100,
-  "content_score": 0-100,
-  "impact_score": 0-100,
-  "readability_score": 0-100,
-  "professionalism_score": 0-100,
-  "keyword_match_score": 0-100,
-  "summary": "One sentence about the resume's main strength",
-  "top_strengths": ["strength1", "strength2", "strength3"],
-  "improvement_areas": ["area1", "area2"]
+  "original_resume": {json.dumps(pruned)},
+  "tailored_resume": {json.dumps(resume_data)},
+  "changes": [
+    {{
+      "section": "Summary",
+      "change": "Tailored summary to emphasize backend architecture and FastAPI experience.",
+      "reason": "Aligns with core requirements in the target job description."
+    }}
+  ],
+  "keywords_added": ["FastAPI", "Scalable Systems"],
+  "sections_changed": ["Summary", "Experience", "Skills"]
 }}
+Note: 'tailored_resume' MUST contain the full updated resume dictionary structure ready to be applied by the user.
 """
-    raw = _call_gemini(prompt, json_mode=True)
-    return _parse_json(raw)
+    raw = call_gemini_api(prompt=prompt, task="resume_tailoring", json_mode=True)
+    parsed = clean_and_parse_json(raw)
+    
+    # Ensure original_resume and tailored_resume are dicts
+    if "original_resume" not in parsed or not isinstance(parsed["original_resume"], dict):
+        parsed["original_resume"] = resume_data
+    if "tailored_resume" not in parsed or not isinstance(parsed["tailored_resume"], dict):
+        parsed["tailored_resume"] = resume_data
+
+    validated = ResumeTailorResponse(**parsed)
+    return validated.model_dump()
 
 
-# ── 9. Generate Improvement Suggestions ───────────────────────────────────────
-def generate_resume_suggestions(data: dict) -> list:
-    """Return prioritized list of improvement suggestions."""
+# ── 6. Resume Generation (Pro Model) ─────────────────────────────────────────
+def generate_resume(user_profile: Dict[str, Any], target_role: str = "") -> Dict[str, Any]:
+    """
+    Generate a full structured professional resume from user profile inputs.
+    Task: resume_generation -> GEMINI_PRO_MODEL
+    """
+    pruned = _prune_resume_context(user_profile)
+    role_str = target_role or "Software Engineer"
+
     prompt = f"""
-Review this resume and provide specific, actionable improvement suggestions.
+You are an expert resume architect. Generate a polished professional resume for the target role of '{role_str}'.
 
-Resume:
-{json.dumps(data, indent=2)}
+{SAFETY_PREAMBLE}
+Use ONLY the provided user profile details below. Do NOT invent fake companies or degrees.
 
-Return ONLY valid JSON as an array:
-[
-  {{
-    "id": "1",
-    "section": "summary|experience|projects|skills|achievements|education|certifications",
-    "priority": "high|medium|low",
-    "issue": "Short description of the problem",
-    "suggestion": "Specific actionable suggestion",
-    "fix_prompt": "Instruction to give AI to fix this (e.g. 'Rewrite the summary with stronger action verbs')"
+User Profile Inputs:
+{json.dumps(pruned, indent=2)}
+
+Target Role: {role_str}
+
+Return ONLY valid JSON containing a complete resume structure:
+{{
+  "target_role": "{role_str}",
+  "resume_data": {{
+    "personal": {{
+      "fullName": "{pruned.get('personal', {}).get('fullName', 'Professional Candidate')}",
+      "title": "{role_str}",
+      "email": "{pruned.get('personal', {}).get('email', '')}",
+      "phone": "{pruned.get('personal', {}).get('phone', '')}",
+      "location": "{pruned.get('personal', {}).get('location', '')}",
+      "linkedin": "",
+      "github": "",
+      "portfolio": "",
+      "profileImage": ""
+    }},
+    "summary": "Craft a 2-3 sentence impactful summary based on user details...",
+    "education": [],
+    "experience": [],
+    "projects": [],
+    "skills": [],
+    "certifications": [],
+    "achievements": []
   }}
-]
-
-Provide 5-8 suggestions. Focus on the most impactful improvements.
+}}
 """
-    raw = _call_gemini(prompt, json_mode=True)
-    result = _parse_json(raw)
-    return result if isinstance(result, list) else result.get("suggestions", [])
+    raw = call_gemini_api(prompt=prompt, task="resume_generation", json_mode=True)
+    parsed = clean_and_parse_json(raw)
+
+    if "resume_data" not in parsed or not isinstance(parsed["resume_data"], dict):
+        parsed["resume_data"] = user_profile
+
+    parsed["target_role"] = role_str
+    validated = ResumeGenerateResponse(**parsed)
+    return validated.model_dump()
 
 
-# ── 10. Chat Edit Resume ───────────────────────────────────────────────────────
-def chat_edit_resume(
-    message: str,
-    resume_data: dict,
-    chat_history: List[dict],
-    selected_section: Optional[str] = None
-) -> dict:
+# ── 7. Skills Recommendations (Fast Model) ───────────────────────────────────
+def skills_recommendations(resume_data: Dict[str, Any], target_role: str = "", job_description: str = "") -> Dict[str, Any]:
     """
-    Process a natural language editing command and return updated resume + AI response.
-    Maintains conversation context.
+    Recommend skills categorized into Already Have, Missing, and Recommended.
+    Task: skills_recommendation -> GEMINI_FAST_MODEL
     """
-    history_text = ""
-    for msg in chat_history[-6:]:  # Keep last 6 messages for context
-        role = "User" if msg.get("role") == "user" else "Assistant"
-        history_text += f"{role}: {msg.get('content', '')}\n"
-
-    section_context = f"\nFocused section: {selected_section}" if selected_section else ""
+    pruned = _prune_resume_context(resume_data)
 
     prompt = f"""
-You are an expert AI resume editor. The user wants to edit their resume using natural language commands.
+You are a tech skills advisor. Analyze the candidate's resume and target role.
 
 {SAFETY_PREAMBLE}
 
 Current Resume:
-{json.dumps(resume_data, indent=2)}
-{section_context}
+{json.dumps(pruned, indent=2)}
 
-Conversation history:
-{history_text}
+Target Role: {target_role if target_role else "Software Engineer"}
+Job Description (optional): {(job_description or '')[:2000]}
 
-User's current instruction: "{message}"
-
-Understand what the user wants to change and apply ONLY that change to the resume.
-If the user asks to edit only one section, modify only that section.
-If the user asks to make summary shorter, only modify the summary field.
-If the user asks to remove a section, set it to empty array/string.
-If the user asks to add more impact to experience, improve only the experience descriptions.
+Categorize skills into 3 groups:
+1. existing_skills: Skills present in the resume.
+2. missing_skills: Critical skills expected for '{target_role}' that are currently missing.
+3. recommended_skills: Valuable complementary skills to boost career growth.
 
 Return ONLY valid JSON:
 {{
-  "ai_response": "Brief friendly explanation of what you changed (1-2 sentences)",
-  "updated_resume": {{ ... complete updated resume data in same schema ... }},
-  "changed_sections": ["list of section names that were modified"]
+  "existing_skills": [
+    {{"name": "Python", "importance": "high", "reason": "Demonstrated in experience section"}}
+  ],
+  "missing_skills": [
+    {{"name": "Docker", "importance": "high", "reason": "Standard requirement for backend roles"}}
+  ],
+  "recommended_skills": [
+    {{"name": "Redis", "importance": "medium", "reason": "Great for high-performance caching"}}
+  ],
+  "skill_priority": ["Docker", "Kubernetes", "Redis"],
+  "reasoning": [
+    "Focusing on containerization will strengthen your backend profile for senior roles."
+  ]
 }}
-
-The updated_resume must include ALL fields, not just the changed ones.
 """
-    raw = _call_gemini(prompt, json_mode=True)
-    return _parse_json(raw)
+    raw = call_gemini_api(prompt=prompt, task="skills_recommendation", json_mode=True)
+    parsed = clean_and_parse_json(raw)
+    validated = SkillsRecommendationResponse(**parsed)
+    return validated.model_dump()
 
 
-# ── 11. Extract Text from PDF ─────────────────────────────────────────────────
-def extract_text_from_pdf(file_bytes: bytes) -> str:
-    """Extract text content from a PDF file."""
-    try:
-        import pypdf
-        reader = pypdf.PdfReader(io.BytesIO(file_bytes))
-        text = ""
-        for page in reader.pages:
-            text += page.extract_text() + "\n"
-        return text.strip()
-    except ImportError:
-        raise ValueError("pypdf is not installed. Run: pip install pypdf")
-    except Exception as e:
-        raise ValueError(f"Failed to extract PDF text: {str(e)}")
-
-
-# ── 12. Extract Text from DOCX ────────────────────────────────────────────────
-def extract_text_from_docx(file_bytes: bytes) -> str:
-    """Extract text content from a DOCX file."""
-    try:
-        import docx
-        doc = docx.Document(io.BytesIO(file_bytes))
-        text = ""
-        for para in doc.paragraphs:
-            text += para.text + "\n"
-        # Also extract from tables
-        for table in doc.tables:
-            for row in table.rows:
-                for cell in row.cells:
-                    text += cell.text + " "
-                text += "\n"
-        return text.strip()
-    except ImportError:
-        raise ValueError("python-docx is not installed. Run: pip install python-docx")
-    except Exception as e:
-        raise ValueError(f"Failed to extract DOCX text: {str(e)}")
-
-
-# ── 13. Extract Job Search Profile from Resume ───────────────────────────────
-def extract_job_search_profile(resume_data: dict) -> dict:
+# ── 8. Bullet Point Improvement (Fast Model) ─────────────────────────────────
+def improve_bullet_points(bullet: str, mode: str = "professional") -> Dict[str, Any]:
     """
-    Analyze structured resume data and extract initial job search preferences to seed a JobSearchProfile.
+    Generate 5 improved versions of a resume bullet point.
+    Task: bullet_improvement -> GEMINI_FAST_MODEL
     """
-    if settings.GEMINI_API_KEY and settings.AI_PROVIDER != "none":
-        try:
-            prompt = f"""
-You are an expert career consultant. Analyze the following resume data and extract initial job search settings.
+    bullet_clean = (bullet or "").strip()
+
+    prompt = f"""
+You are a bullet point optimization engine. Improve the following work experience or project bullet point.
+
+{SAFETY_PREAMBLE}
+DO NOT invent metrics or fake statistics (e.g. do not invent "improved latency by 45%" unless provided in the original text!).
+
+Original Bullet:
+\"{bullet_clean}\"
+
+Generate 5 variations:
+1. Professional: High-impact, executive tone.
+2. ATS Version: Packed with clear keywords and industry standard action verbs.
+3. Technical: Technical focus detailing architecture or methodology.
+4. Achievement-Focused: Focused on outcome, value delivered, or goal achieved.
+5. Concise: Short, crisp, and direct.
+
+Return ONLY valid JSON matching this exact structure:
+{{
+  "original": "{bullet_clean}",
+  "professional": "Professional version here...",
+  "ats_friendly": "ATS friendly version here...",
+  "technical": "Technical version here...",
+  "achievement_focused": "Achievement-focused version here...",
+  "concise": "Concise version here...",
+  "improved": [
+    {{"version": "Professional", "text": "Professional version here...", "explanation": "Replaced weak verbs with active leadership phrasing."}},
+    {{"version": "ATS Friendly", "text": "ATS friendly version here...", "explanation": "Optimized for keyword parsing."}},
+    {{"version": "Technical", "text": "Technical version here...", "explanation": "Emphasized technical stack and architecture."}},
+    {{"version": "Achievement-Focused", "text": "Achievement-focused version here...", "explanation": "Focused on outcome and deliverables."}},
+    {{"version": "Concise", "text": "Concise version here...", "explanation": "Streamlined sentence structure."}}
+  ],
+  "tips": [
+    "Consider adding specific quantifiable metrics if available from your real experience."
+  ]
+}}
+"""
+    raw = call_gemini_api(prompt=prompt, task="bullet_improvement", json_mode=True)
+    parsed = clean_and_parse_json(raw)
+    parsed["original"] = bullet_clean
+    validated = BulletImprovementResponse(**parsed)
+    return validated.model_dump()
+
+
+# ── 9. Grammar & Resume Improvement (Fast Model) ────────────────────────────
+def grammar_and_format_improvement(resume_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Fix grammar, spelling, and sentence structure across the resume.
+    Task: grammar_improvement -> GEMINI_FAST_MODEL
+    """
+    pruned = _prune_resume_context(resume_data)
+
+    prompt = f"""
+You are a proofreader and resume editor. Correct grammar, spelling, punctuation, and sentence clarity.
+
+{SAFETY_PREAMBLE}
 
 Resume Data:
 {json.dumps(resume_data, indent=2)}
 
-Based on this resume, infer:
-1. Target Roles (e.g. ['Software Engineer', 'Frontend Developer'] - list 1 to 3 roles, matching their experience and title)
-2. Top 8-10 Skills (e.g. ['React', 'JavaScript', 'TailwindCSS'])
-3. Relevant search keywords (e.g. ['SaaS', 'design systems', 'FastAPI'])
-4. Experience Level: one of "entry", "junior", "mid", "senior", or "any"
-5. Current Title: their most recent professional title, or empty string if none
-6. Education Level: their highest degree obtained, or empty string
-7. Locations: list of cities or "Remote" (infer from location in resume, default to ["Remote"] if none)
-8. Preferred Work Modes: list containing "remote", "hybrid", and/or "onsite" (default to ["remote", "hybrid", "onsite"])
-9. Employment Types: list containing "full_time", "part_time", "internship", and/or "contract" (default to ["full_time"])
-10. Country Code: "in" for India, "us" for USA, "gb" for UK, "ca" for Canada, "au" for Australia, or "in" by default.
-
-Return ONLY a valid JSON object matching this exact schema:
+Return ONLY valid JSON:
 {{
-  "target_roles": ["string"],
-  "skills": ["string"],
-  "keywords": ["string"],
-  "experience_level": "entry|junior|mid|senior|any",
-  "current_title": "string",
-  "education_level": "string",
-  "locations": ["string"],
-  "work_modes": ["remote"|"hybrid"|"onsite"],
-  "employment_types": ["full_time"|"part_time"|"internship"|"contract"],
-  "country_code": "in|us|gb|ca|au"
+  "improved_resume_data": {json.dumps(resume_data)},
+  "changes_made": [
+    {{
+      "section": "Summary",
+      "change": "Corrected typo in 'experiance' -> 'experience' and improved phrasing.",
+      "reason": "Grammar and spelling polish."
+    }}
+  ]
 }}
 """
-            raw = _call_gemini(prompt, json_mode=True)
-            return _parse_json(raw)
-        except Exception as e:
-            # Fall back to heuristic extraction on failure
-            print(f"[!] Error in Gemini extract_job_search_profile: {e}")
-            pass
+    raw = call_gemini_api(prompt=prompt, task="grammar_improvement", json_mode=True)
+    parsed = clean_and_parse_json(raw)
 
-    # Heuristic fallback parsing logic
-    personal = resume_data.get("personal", {})
-    title = personal.get("title", "") or ""
-    
-    # Extract skills
-    skills_list = [s.get("name") for s in resume_data.get("skills", []) if s.get("name")]
-    
-    # Target roles
-    target_roles = [title] if title else ["Software Engineer"]
-    
-    # Locations
-    loc = personal.get("location", "")
-    locations = [loc] if loc else ["Remote"]
-    
-    # Highest Education Level
-    edu_list = resume_data.get("education", [])
-    highest_edu = ""
-    if edu_list:
-        highest_edu = edu_list[0].get("degree", "")
-        if edu_list[0].get("fieldOfStudy"):
-            highest_edu += f" in {edu_list[0].get('fieldOfStudy')}"
+    if "improved_resume_data" not in parsed or not isinstance(parsed["improved_resume_data"], dict):
+        parsed["improved_resume_data"] = resume_data
 
-    return {
-        "target_roles": target_roles,
-        "skills": skills_list[:8],
-        "keywords": skills_list[:5],
-        "experience_level": "any",
-        "current_title": title,
-        "education_level": highest_edu,
-        "locations": locations,
-        "work_modes": ["remote", "hybrid", "onsite"],
-        "employment_types": ["full_time"],
-        "country_code": "in"
-    }
+    validated = GrammarImprovementResponse(**parsed)
+    return validated.model_dump()
 
+
+# ── 10. Contextual Resume AI Chat (Fast Model) ───────────────────────────────
+def resume_ai_chat(resume_data: Dict[str, Any], message: str, chat_history: Optional[List[Dict[str, str]]] = None) -> Dict[str, Any]:
+    """
+    Context-aware AI Assistant inside AI Studio.
+    Task: resume_chat -> GEMINI_FAST_MODEL
+    """
+    pruned = _prune_resume_context(resume_data)
+    history_str = ""
+    if chat_history:
+        for turn in chat_history[-6:]:
+            role = turn.get("role", "user")
+            content = turn.get("content", "")
+            history_str += f"{role.upper()}: {content}\n"
+
+    prompt = f"""
+You are CareerAI Studio's Intelligent Resume Assistant. Answer the user's question using their actual resume context.
+
+{SAFETY_PREAMBLE}
+
+User Resume Context:
+{json.dumps(pruned, indent=2)}
+
+Recent Conversation History:
+{history_str}
+
+User Question:
+\"{message}\"
+
+Provide a helpful, polite, and constructive answer tailored specifically to their resume.
+
+Return ONLY valid JSON:
+{{
+  "reply": "Your response answering the user's question directly...",
+  "suggested_followups": [
+    "How can I tailor my summary for a Senior Developer role?",
+    "What key skills should I feature at the top?"
+  ]
+}}
+"""
+    raw = call_gemini_api(prompt=prompt, task="resume_chat", json_mode=True)
+    parsed = clean_and_parse_json(raw)
+    validated = ResumeChatResponse(**parsed)
+    return validated.model_dump()

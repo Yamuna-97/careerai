@@ -1,97 +1,107 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Header from '../components/Header';
 import Editor from '@monaco-editor/react';
+import apiClient from '../api/client';
 
-// Default templates configuration
+// ── Default LaTeX templates ───────────────────────────────────────────────────
 const LATEX_TEMPLATES = {
   "ATS Resume": `% ATS Resume Template
-\\documentclass{article}
+\\documentclass[11pt]{article}
 \\usepackage[utf8]{inputenc}
 \\usepackage[margin=1in]{geometry}
+\\usepackage{enumitem}
 \\begin{document}
 \\begin{center}
-{\\LARGE \\textbf{Jane Doe}} \\\\
-Email: jane@example.com | Phone: +1 555-123-4567 | San Francisco, CA
+  {\\LARGE \\textbf{Jane Doe}} \\\\[4pt]
+  \\small jane@example.com $\\mid$ +1 555-123-4567 $\\mid$ San Francisco, CA
 \\end{center}
-\\section*{Summary}
+\\section*{Professional Summary}
 Results-oriented software developer with 5+ years of experience building scalable backend APIs.
 \\section*{Experience}
-\\textbf{TechCorp Solutions} \\hfill Lead Engineer (2021 - Present) \\\\
-- Architected data pipeline services that processed 2M+ active client records. \\\\
-- Optimized query speeds by 30% utilizing database caching tools.
+\\textbf{TechCorp Solutions} \\hfill Lead Engineer (2021 -- Present) \\\\
+\\begin{itemize}[noitemsep,topsep=2pt]
+  \\item Architected data pipeline services that processed 2M+ active client records.
+  \\item Optimized query speeds by 30\\% utilizing database caching tools.
+\\end{itemize}
+\\section*{Education}
+\\textbf{B.Sc. Computer Science} \\hfill State University (2014 -- 2018)
+\\section*{Skills}
+Python, SQL, FastAPI, React, Docker, AWS
 \\end{document}`,
-  
+
   "Software Engineer": `% Software Engineer Resume
-\\documentclass{article}
+\\documentclass[11pt]{article}
 \\usepackage[utf8]{inputenc}
 \\usepackage[margin=0.8in]{geometry}
 \\begin{document}
 \\begin{center}
-{\\LARGE \\textbf{Yamuna}} \\\\
-Chennai, India | github.com/yamuna-97 | yamuna.dev
+  {\\LARGE \\textbf{Yamuna}} \\\\[4pt]
+  Chennai, India $\\mid$ github.com/yamuna-97 $\\mid$ yamuna.dev
 \\end{center}
 \\section*{Technical Skills}
 \\textbf{Languages:} Python, SQL, C++, JavaScript \\\\
 \\textbf{Frameworks:} React, FastAPI, TensorFlow, PyTorch
 \\section*{Projects}
 \\textbf{CareerAI Platform} \\hfill \\textit{React, FastAPI, Supabase} \\\\
-- Built mock interview simulator and Overleaf-style LaTeX code editor.
+Built mock interview simulator and Overleaf-style LaTeX editor.
 \\end{document}`,
 
   "Academic CV": `% Academic CV Template
-\\documentclass{article}
+\\documentclass[11pt]{article}
 \\usepackage[utf8]{inputenc}
 \\begin{document}
 \\begin{center}
-{\\LARGE \\textbf{Dr. Alex Smith}} \\\\
-Department of Computer Science | University of Science
+  {\\LARGE \\textbf{Dr. Alex Smith}} \\\\[4pt]
+  Department of Computer Science $\\mid$ University of Science
 \\end{center}
 \\section*{Education}
-\\textbf{Ph.D. in Computer Science} \\hfill University of Science (2018 - 2022)
+\\textbf{Ph.D. Computer Science} \\hfill University of Science (2018 -- 2022)
 \\section*{Publications}
-- Smith, A. \\textit{Advanced Neural Architectures.} Journal of AI Research, 2023.
+Smith, A. \\textit{Advanced Neural Architectures.} Journal of AI Research, 2023.
 \\end{document}`
 };
 
-export default function LaTeXEditorPage() {
-  const navigate = useNavigate();
-
-  // Project/Files State
-  const [projectId, setProjectId] = useState(null);
-  const [projectName, setProjectName] = useState("New LaTeX Resume");
-  const [files, setFiles] = useState({
-    "cv.tex": `% CareerAI LaTeX Editor
-\\documentclass{article}
+const DEFAULT_TEX = `% CareerAI LaTeX Editor — Overleaf-Style
+\\documentclass[11pt]{article}
 \\usepackage[utf8]{inputenc}
 \\usepackage[margin=1in]{geometry}
+\\usepackage{enumitem}
 
 \\begin{document}
 
 \\begin{center}
-{\\LARGE \\textbf{Jane Doe}} \\\\
-jane.doe@example.com | +1 (555) 123-4567 | San Francisco, CA
+  {\\LARGE \\textbf{Jane Doe}} \\\\[4pt]
+  \\small jane.doe@example.com $\\mid$ +1 (555) 123-4567 $\\mid$ San Francisco, CA
 \\end{center}
 
 \\section*{Professional Summary}
 Senior Product Designer with 6+ years of experience transforming complex problems into intuitive SaaS dashboards.
 
 \\section*{Professional Experience}
-\\textbf{TechCorp Solutions} \\hfill Lead Designer (2021 - Present) \\\\
-- Spearheaded the redesign of core analytics dashboard, boosting user engagement by 25\\%. \\\\
-- Maintained a comprehensive design system utilized by 50+ engineers.
+\\textbf{TechCorp Solutions} \\hfill Lead Designer (2021 -- Present) \\\\
+\\begin{itemize}[noitemsep,topsep=2pt]
+  \\item Spearheaded the redesign of core analytics dashboard, boosting user engagement by 25\\%.
+  \\item Maintained a comprehensive design system utilized by 50+ engineers.
+\\end{itemize}
 
 \\section*{Technical Skills}
 \\textbf{Design:} UI/UX, Wireframing, Figma, Design Systems \\\\
 \\textbf{Research:} Usability Testing, Personas, A/B Testing
 
-\\end{document}`
-  });
-  const [activeFile, setActiveFile] = useState("cv.tex");
-  
+\\end{document}`;
+
+export default function LaTeXEditorPage() {
+  const navigate = useNavigate();
+
+  // Project / Files State
+  const [projectId, setProjectId] = useState(null);
+  const [projectName, setProjectName] = useState('Untitled Resume');
+  const [files, setFiles] = useState({ 'cv.tex': DEFAULT_TEX });
+  const [activeFile, setActiveFile] = useState('cv.tex');
+
   // Compilation States
-  const [compileStatus, setCompileStatus] = useState("Ready"); // 'Ready' | 'Compiling' | 'Success' | 'Failed'
-  const [logs, setLogs] = useState("");
+  const [compileStatus, setCompileStatus] = useState('ready'); // 'ready'|'compiling'|'success'|'failed'
+  const [logs, setLogs] = useState('');
   const [errors, setErrors] = useState([]);
   const [pdfUrl, setPdfUrl] = useState(null);
   const [zoom, setZoom] = useState(100);
@@ -99,184 +109,198 @@ Senior Product Designer with 6+ years of experience transforming complex problem
   const [showLogs, setShowLogs] = useState(false);
 
   // File explorer states
-  const [newFileName, setNewFileName] = useState("");
+  const [newFileName, setNewFileName] = useState('');
   const [showNewFileModal, setShowNewFileModal] = useState(false);
   const [showProjectsModal, setShowProjectsModal] = useState(false);
+  const [showTemplatesMenu, setShowTemplatesMenu] = useState(false);
   const [projectList, setProjectList] = useState([]);
+  const [latexTemplatesList, setLatexTemplatesList] = useState([]);
 
   // AI Assistant States
   const [showAIPanel, setShowAIPanel] = useState(false);
-  const [aiMessage, setAiMessage] = useState("");
+  const [aiMessage, setAiMessage] = useState('');
   const [chatHistory, setChatHistory] = useState([
-    { role: "assistant", content: "Hi! I am your LaTeX Assistant. I can generate templates, tailor formatting, or fix compilation errors. Try asking: 'Add a projects section' or 'Make margins 0.5 inches'." }
+    { role: 'assistant', content: "Hi! I'm your LaTeX Assistant. Try: 'Add a projects section', 'Make margins 0.5 inches', or 'Fix errors'." }
   ]);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [proposedCodeFix, setProposedCodeFix] = useState(null);
 
   const autoCompileTimerRef = useRef(null);
+  const templatesMenuRef = useRef(null);
 
-  // Load initial templates / compile on startup
+  // ── Init ──────────────────────────────────────────────────────────────────
   useEffect(() => {
-    handleCompile();
-    fetchProjects();
+    fetchLatexTemplates();
+    const params = new URLSearchParams(window.location.search);
+    const tplId = params.get('template');
+    if (tplId) {
+      handleLoadTemplate(tplId);
+      // Clean up URL query parameters
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else {
+      handleCompile();
+      fetchProjects();
+    }
   }, []);
 
-  // Auto Compile Debounce logic
-  const handleEditorChange = (value) => {
-    setFiles(prev => ({
-      ...prev,
-      [activeFile]: value
-    }));
-
-    if (autoCompile) {
-      if (autoCompileTimerRef.current) clearTimeout(autoCompileTimerRef.current);
-      autoCompileTimerRef.current = setTimeout(() => {
-        handleCompile();
-      }, 2000);
+  // ── Fetch LaTeX Templates ──────────────────────────────────────────────────
+  const fetchLatexTemplates = async () => {
+    try {
+      const res = await apiClient.get('/latex/templates');
+      setLatexTemplatesList(res.data || []);
+    } catch (e) {
+      console.error('Failed to fetch LaTeX templates:', e);
     }
   };
 
-  // Compile API Call
-  const handleCompile = async () => {
-    setCompileStatus("Compiling");
-    try {
-      const res = await fetch("http://localhost:8000/api/v1/latex/compile", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          files,
-          compiler: "pdflatex"
-        })
-      });
+  // Close templates dropdown on outside click
+  useEffect(() => {
+    const handler = (e) => {
+      if (templatesMenuRef.current && !templatesMenuRef.current.contains(e.target)) {
+        setShowTemplatesMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
-      if (res.ok) {
-        const data = await res.json();
-        setLogs(data.logs || "");
-        setErrors(data.errors || []);
-        
-        if (data.success && data.pdf) {
-          setCompileStatus("Success");
-          // Convert Base64 string to Blob URL for the iframe preview
-          const byteCharacters = atob(data.pdf);
-          const byteNumbers = new Array(byteCharacters.length);
-          for (let i = 0; i < byteCharacters.length; i++) {
-            byteNumbers[i] = byteCharacters.charCodeAt(i);
-          }
-          const byteArray = new Uint8Array(byteNumbers);
-          const blob = new Blob([byteArray], { type: "application/pdf" });
-          const url = URL.createObjectURL(blob);
-          setPdfUrl(url);
-        } else {
-          setCompileStatus("Failed");
-          setShowLogs(true);
-        }
+  // ── Editor change + auto compile ─────────────────────────────────────────
+  const handleEditorChange = (value) => {
+    setFiles(prev => ({ ...prev, [activeFile]: value }));
+    if (autoCompile) {
+      if (autoCompileTimerRef.current) clearTimeout(autoCompileTimerRef.current);
+      autoCompileTimerRef.current = setTimeout(() => handleCompile(), 2000);
+    }
+  };
+
+  // ── Compile ───────────────────────────────────────────────────────────────
+  const handleCompile = async () => {
+    setCompileStatus('compiling');
+    try {
+      const res = await apiClient.post('/latex/compile', {
+        files,
+        compiler: 'pdflatex'
+      });
+      const data = res.data;
+      setLogs(data.logs || '');
+      setErrors(data.errors || []);
+
+      if (data.success && data.pdf) {
+        setCompileStatus('success');
+        const bytes = atob(data.pdf);
+        const arr = new Uint8Array(bytes.length);
+        for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+        const blob = new Blob([arr], { type: 'application/pdf' });
+        setPdfUrl(URL.createObjectURL(blob));
       } else {
-        setCompileStatus("Failed");
+        setCompileStatus('failed');
+        setShowLogs(true);
       }
     } catch (e) {
       console.error(e);
-      setCompileStatus("Failed");
+      setCompileStatus('failed');
     }
   };
 
-  // Download PDF file
+  // ── Download PDF ──────────────────────────────────────────────────────────
   const handleDownloadPDF = () => {
     if (!pdfUrl) return;
-    const link = document.createElement("a");
-    link.href = pdfUrl;
-    link.download = `${projectName.replace(/\s+/g, "_").toLowerCase()}_resume.pdf`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const a = document.createElement('a');
+    a.href = pdfUrl;
+    a.download = `${projectName.replace(/\s+/g, '_')}.pdf`;
+    a.click();
   };
 
-  // Download LaTeX ZIP project
-  const handleDownloadProject = () => {
-    // Generate simple text summary zip contents
-    const projectWording = Object.entries(files).map(([name, code]) => `=== FILE: ${name} ===\n${code}`).join("\n\n");
-    const blob = new Blob([projectWording], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${projectName.replace(/\s+/g, "_").toLowerCase()}_latex.txt`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  // ── Download ZIP ──────────────────────────────────────────────────────────
+  const handleDownloadProject = async () => {
+    try {
+      const res = await apiClient.post('/latex/download', { files }, { responseType: 'blob' });
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${projectName.replace(/\s+/g, '_')}_source.zip`;
+      a.click();
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  // Save Project to Database
+  // ── Save Project ──────────────────────────────────────────────────────────
   const handleSaveProject = async () => {
     try {
-      const token = localStorage.getItem('token');
-      
       if (projectId) {
-        // Update existing project files
-        await fetch(`http://localhost:8000/api/v1/latex/projects/${projectId}`, {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${token}`
-          },
-          body: JSON.stringify({ files })
-        });
+        await apiClient.put(`/latex/projects/${projectId}`, { files });
       } else {
-        // Create new project
-        const res = await fetch("http://localhost:8000/api/v1/latex/projects", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            name: projectName,
-            initial_latex: files["cv.tex"]
-          })
+        const res = await apiClient.post('/latex/projects', {
+          name: projectName,
+          initial_latex: files['cv.tex']
         });
-        if (res.ok) {
-          const data = await res.json();
-          setProjectId(data.project_id);
-        }
+        setProjectId(res.data.project_id);
       }
-      
-      // Notify save status locally
-      alert("Project saved successfully!");
       fetchProjects();
     } catch (e) {
       console.error(e);
     }
   };
 
-  // Fetch Saved Projects List
+  // ── Fetch Projects ────────────────────────────────────────────────────────
   const fetchProjects = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch("http://localhost:8000/api/v1/latex/projects", {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setProjectList(data.projects || []);
-      }
+      const res = await apiClient.get('/latex/projects');
+      setProjectList(res.data?.projects || []);
     } catch (e) {
       console.error(e);
     }
   };
 
-  // Load a Saved Project
+  // ── Load Project ──────────────────────────────────────────────────────────
   const handleLoadProject = async (id) => {
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:8000/api/v1/latex/projects/${id}`, {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setProjectId(data.project.id);
-        setProjectName(data.project.name);
-        setFiles(data.files);
-        const firstFile = Object.keys(data.files)[0] || "cv.tex";
+      const res = await apiClient.get(`/latex/projects/${id}`);
+      const data = res.data;
+      setProjectId(data.project.id);
+      setProjectName(data.project.name);
+      setFiles(data.files);
+      const firstFile = Object.keys(data.files)[0] || 'cv.tex';
+      setActiveFile(firstFile);
+      setShowProjectsModal(false);
+      setTimeout(() => handleCompile(), 100);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // ── Load Template ─────────────────────────────────────────────────────────
+  const handleLoadTemplate = async (templateId) => {
+    try {
+      setCompileStatus('compiling');
+      const res = await apiClient.get(`/latex/templates/${templateId}`);
+      if (res.data && res.data.files) {
+        setFiles(res.data.files);
+        const firstFile = Object.keys(res.data.files).includes('cv.tex') ? 'cv.tex' : Object.keys(res.data.files)[0];
         setActiveFile(firstFile);
-        setShowProjectsModal(false);
+        setShowTemplatesMenu(false);
+        setTimeout(() => handleCompile(), 100);
+      }
+    } catch (e) {
+      console.error('Failed to load template:', e);
+      alert('Failed to load template files.');
+      setCompileStatus('ready');
+    }
+  };
+
+  // ── Generate from Builder ─────────────────────────────────────────────────
+  const handleGenerateFromManual = async () => {
+    const saved = localStorage.getItem('careerai_resume_data');
+    if (!saved) {
+      alert('No manual builder data found. Create a resume in Manual Builder first.');
+      return;
+    }
+    try {
+      const res = await apiClient.post('/latex/generate', { resume_data: JSON.parse(saved) });
+      if (res.data?.success && res.data?.latex_code) {
+        setFiles(prev => ({ ...prev, 'cv.tex': res.data.latex_code }));
+        setActiveFile('cv.tex');
         setTimeout(() => handleCompile(), 100);
       }
     } catch (e) {
@@ -284,102 +308,36 @@ Senior Product Designer with 6+ years of experience transforming complex problem
     }
   };
 
-  // Convert current CareerAI manual builder data into LaTeX
-  const handleGenerateFromResume = async () => {
-    const saved = localStorage.getItem("careerai_resume_data");
-    if (!saved) {
-      alert("No manual builder data found. Create a resume in Manual Builder first.");
-      return;
-    }
-
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch("http://localhost:8000/api/v1/latex/generate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
-        body: JSON.stringify({ resume_data: JSON.parse(saved) })
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.latex_code) {
-          setFiles(prev => ({
-            ...prev,
-            "cv.tex": data.latex_code
-          }));
-          setActiveFile("cv.tex");
-          setTimeout(() => handleCompile(), 100);
-        }
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  // Import parsed structured details from LaTeX back to Manual Builder
+  // ── Import to Builder ─────────────────────────────────────────────────────
   const handleImportToBuilder = async () => {
-    if (!window.confirm("This will overwrite your Manual Builder resume data. Proceed?")) return;
-    
+    if (!window.confirm('This will overwrite your Manual Builder resume data. Proceed?')) return;
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch("http://localhost:8000/api/v1/latex/import", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
-        body: JSON.stringify({ latex_code: files["cv.tex"] })
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.resume_data) {
-          localStorage.setItem("careerai_resume_data", JSON.stringify(data.resume_data));
-          alert("Imported successfully! Redirecting to Manual Builder...");
-          navigate("/resume/builder");
-        }
+      const res = await apiClient.post('/latex/import', { latex_code: files['cv.tex'] });
+      if (res.data?.success && res.data?.resume_data) {
+        localStorage.setItem('careerai_resume_data', JSON.stringify(res.data.resume_data));
+        navigate('/resume/builder');
       }
     } catch (e) {
       console.error(e);
     }
   };
 
-  // AI Assistant commands
+  // ── AI Assistant ──────────────────────────────────────────────────────────
   const handleSendMessage = async () => {
     if (!aiMessage.trim() || isAiLoading) return;
-    
     const userWording = aiMessage;
-    setChatHistory(prev => [...prev, { role: "user", content: userWording }]);
-    setAiMessage("");
+    setChatHistory(prev => [...prev, { role: 'user', content: userWording }]);
+    setAiMessage('');
     setIsAiLoading(true);
-
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch("http://localhost:8000/api/v1/latex/ai/edit", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          latex_code: files[activeFile],
-          instruction: userWording
-        })
+      const res = await apiClient.post('/latex/ai/edit', {
+        latex_code: files[activeFile],
+        instruction: userWording
       });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.latex_code) {
-          setFiles(prev => ({
-            ...prev,
-            [activeFile]: data.latex_code
-          }));
-          setChatHistory(prev => [...prev, { role: "assistant", content: `Applied instruction: "${userWording}".` }]);
-          setTimeout(() => handleCompile(), 100);
-        }
+      if (res.data?.success && res.data?.latex_code) {
+        setFiles(prev => ({ ...prev, [activeFile]: res.data.latex_code }));
+        setChatHistory(prev => [...prev, { role: 'assistant', content: `Applied: "${userWording}"` }]);
+        setTimeout(() => handleCompile(), 100);
       }
     } catch (e) {
       console.error(e);
@@ -388,37 +346,24 @@ Senior Product Designer with 6+ years of experience transforming complex problem
     }
   };
 
-  // Trigger Gemini AI to fix compilation errors
   const handleAIFixErrors = async () => {
     if (errors.length === 0) return;
     setIsAiLoading(true);
     setShowAIPanel(true);
-
     const firstErr = errors[0];
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch("http://localhost:8000/api/v1/latex/ai/fix", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          latex_code: files["cv.tex"],
-          error_message: firstErr.message,
-          line_number: firstErr.line
-        })
+      const res = await apiClient.post('/latex/ai/fix', {
+        latex_code: files['cv.tex'],
+        error_message: firstErr.message,
+        line_number: firstErr.line
       });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.corrected_latex) {
-          setProposedCodeFix(data.corrected_latex);
-          setChatHistory(prev => [
-            ...prev,
-            { role: "assistant", content: `I found the syntax issue on line ${firstErr.line}: "${firstErr.message}". Explanation: ${data.explanation}. Click 'Apply Fix' below to resolve.` }
-          ]);
-        }
+      if (res.data?.success && res.data?.fixed_code) {
+        setFiles(prev => ({ ...prev, 'cv.tex': res.data.fixed_code }));
+        setChatHistory(prev => [...prev, {
+          role: 'assistant',
+          content: `Fixed error: ${res.data.explanation || firstErr.message}`
+        }]);
+        setTimeout(() => handleCompile(), 100);
       }
     } catch (e) {
       console.error(e);
@@ -427,396 +372,508 @@ Senior Product Designer with 6+ years of experience transforming complex problem
     }
   };
 
-  // Apply code fix
   const handleApplyFix = () => {
     if (!proposedCodeFix) return;
-    setFiles(prev => ({ ...prev, "cv.tex": proposedCodeFix }));
+    setFiles(prev => ({ ...prev, 'cv.tex': proposedCodeFix }));
     setProposedCodeFix(null);
-    setChatHistory(prev => [...prev, { role: "assistant", content: "Applied error correction code fix." }]);
     setTimeout(() => handleCompile(), 100);
   };
 
-  // File Explorer CRUD
+  // ── File CRUD ─────────────────────────────────────────────────────────────
   const handleCreateFile = () => {
     if (!newFileName.trim()) return;
-    setFiles(prev => ({
-      ...prev,
-      [newFileName.trim()]: `% ${newFileName.trim()}\n`
-    }));
+    setFiles(prev => ({ ...prev, [newFileName.trim()]: `% ${newFileName.trim()}\n` }));
     setActiveFile(newFileName.trim());
-    setNewFileName("");
+    setNewFileName('');
     setShowNewFileModal(false);
   };
 
   const handleDeleteFile = (name) => {
-    if (name === "cv.tex") {
-      alert("Cannot delete primary cv.tex file.");
-      return;
-    }
+    if (name === 'cv.tex') { alert('Cannot delete primary cv.tex file.'); return; }
     if (window.confirm(`Delete ${name}?`)) {
       const updated = { ...files };
       delete updated[name];
       setFiles(updated);
-      setActiveFile("cv.tex");
+      setActiveFile('cv.tex');
     }
   };
 
-  return (
-    <div className="flex-1 w-full relative overflow-hidden flex flex-col pb-20 md:pb-8">
+  // ── Status indicator ──────────────────────────────────────────────────────
+  const statusColor = {
+    ready: 'bg-slate-400',
+    compiling: 'bg-amber-400 animate-pulse',
+    success: 'bg-emerald-500',
+    failed: 'bg-red-500',
+  }[compileStatus] || 'bg-slate-400';
 
-        
-        {/* Local Page Toolbar */}
-        <div className="bg-surface border-b border-outline-variant/40 px-6 py-3 flex flex-col sm:flex-row justify-between sm:items-center gap-4 shrink-0">
-          <div>
-            <h2 className="font-headline-sm text-headline-sm font-bold text-on-surface">LaTeX Resume Editor</h2>
+  const statusLabel = {
+    ready: 'Ready',
+    compiling: 'Compiling…',
+    success: 'Success',
+    failed: 'Errors',
+  }[compileStatus] || 'Ready';
+
+  return (
+    <div className="flex flex-col w-full h-screen overflow-hidden bg-[#1e1e1e]">
+
+      {/* ── Top Toolbar (Overleaf-style) ───────────────────────────────── */}
+      <div className="bg-[#1a1a2e] border-b border-slate-700/80 px-4 py-2 flex items-center justify-between gap-3 shrink-0 z-10">
+
+        {/* Left: project name + file actions */}
+        <div className="flex items-center gap-3 min-w-0">
+          {/* CareerAI brand logo area */}
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#EC4899] to-[#FF8A3D] flex items-center justify-center">
+              <span className="material-symbols-outlined text-white text-sm">description</span>
+            </div>
+          </div>
+
+          <div className="w-px h-5 bg-slate-600/60 shrink-0"></div>
+
+          {/* Project name editable */}
+          <input
+            type="text"
+            value={projectName}
+            onChange={(e) => setProjectName(e.target.value)}
+            className="bg-transparent text-slate-200 text-sm font-semibold focus:outline-none min-w-0 max-w-[180px] truncate border-b border-transparent focus:border-slate-500 py-0.5"
+          />
+        </div>
+
+        {/* Center: toolbar buttons */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+
+          {/* Templates dropdown */}
+          <div className="relative" ref={templatesMenuRef}>
+            <button
+              onClick={() => setShowTemplatesMenu(v => !v)}
+              className="px-2.5 py-1 rounded text-[11px] font-semibold text-slate-300 hover:bg-slate-700 border border-slate-600/50 cursor-pointer flex items-center gap-1"
+            >
+              <span className="material-symbols-outlined text-xs">style</span>
+              Templates
+              <span className="material-symbols-outlined text-[10px]">expand_more</span>
+            </button>
+            {showTemplatesMenu && (
+              <div className="absolute top-full left-0 mt-1 w-56 bg-[#252535] border border-slate-600/60 rounded-lg shadow-2xl z-50 overflow-hidden max-h-80 overflow-y-auto">
+                {latexTemplatesList.map(tpl => (
+                  <button
+                    key={tpl.id}
+                    onClick={() => handleLoadTemplate(tpl.id)}
+                    className="w-full text-left px-3 py-2 text-[11px] text-slate-300 hover:bg-slate-700 hover:text-white cursor-pointer border-b border-slate-700/40 last:border-0"
+                    title={tpl.description}
+                  >
+                    <div className="font-semibold">{tpl.name}</div>
+                    <div className="text-[9px] text-slate-400 truncate">{tpl.description}</div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <button
+            onClick={() => setShowProjectsModal(true)}
+            className="px-2.5 py-1 rounded text-[11px] font-semibold text-slate-300 hover:bg-slate-700 border border-slate-600/50 cursor-pointer flex items-center gap-1"
+          >
+            <span className="material-symbols-outlined text-xs">folder_open</span>
+            Open
+          </button>
+
+          <button
+            onClick={handleSaveProject}
+            className="px-2.5 py-1 rounded text-[11px] font-semibold text-slate-300 hover:bg-slate-700 border border-slate-600/50 cursor-pointer flex items-center gap-1"
+          >
+            <span className="material-symbols-outlined text-xs">save</span>
+            Save
+          </button>
+
+          <button
+            onClick={handleGenerateFromManual}
+            className="px-2.5 py-1 rounded text-[11px] font-semibold text-[#EC4899] hover:bg-[#EC4899]/10 border border-[#EC4899]/30 cursor-pointer flex items-center gap-1"
+          >
+            <span className="material-symbols-outlined text-xs">sync</span>
+            Sync Builder
+          </button>
+
+          <button
+            onClick={handleImportToBuilder}
+            className="px-2.5 py-1 rounded text-[11px] font-semibold text-[#FF8A3D] hover:bg-[#FF8A3D]/10 border border-[#FF8A3D]/30 cursor-pointer flex items-center gap-1"
+          >
+            <span className="material-symbols-outlined text-xs">upload</span>
+            To Builder
+          </button>
+        </div>
+
+        {/* Right: compile button + download */}
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Auto-compile toggle */}
+          <label className="flex items-center gap-1.5 text-[10px] text-slate-400 cursor-pointer select-none">
             <input
-              type="text"
-              value={projectName}
-              onChange={(e) => setProjectName(e.target.value)}
-              className="bg-transparent border-b border-transparent hover:border-outline-variant focus:border-primary text-xs text-on-surface-variant font-medium py-0.5 focus:outline-none"
+              type="checkbox"
+              checked={autoCompile}
+              onChange={(e) => setAutoCompile(e.target.checked)}
+              className="cursor-pointer accent-[#EC4899]"
+            />
+            Auto
+          </label>
+
+          {/* Download PDF */}
+          <button
+            onClick={handleDownloadPDF}
+            disabled={!pdfUrl}
+            className="p-1.5 rounded text-slate-400 hover:text-white hover:bg-slate-700 disabled:opacity-30 cursor-pointer"
+            title="Download PDF"
+          >
+            <span className="material-symbols-outlined text-sm">download</span>
+          </button>
+
+          {/* AI Toggle */}
+          <button
+            onClick={() => setShowAIPanel(v => !v)}
+            className={`p-1.5 rounded cursor-pointer transition-colors ${showAIPanel ? 'bg-[#EC4899]/20 text-[#EC4899]' : 'text-slate-400 hover:text-white hover:bg-slate-700'}`}
+            title="AI LaTeX Assistant"
+          >
+            <span className="material-symbols-outlined text-sm">auto_awesome</span>
+          </button>
+
+          {/* Recompile — main CTA */}
+          <button
+            onClick={handleCompile}
+            disabled={compileStatus === 'compiling'}
+            className="px-4 py-1.5 rounded-lg text-white text-[11px] font-bold shadow-lg hover:opacity-90 disabled:opacity-60 cursor-pointer flex items-center gap-1.5 bg-gradient-to-r from-[#EC4899] to-[#FF8A3D] transition-opacity"
+          >
+            {compileStatus === 'compiling' ? (
+              <>
+                <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                Compiling…
+              </>
+            ) : (
+              <>
+                <span className="material-symbols-outlined text-sm">play_arrow</span>
+                Recompile
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* ── Main Editor Area ──────────────────────────────────────────────── */}
+      <div className="flex-grow flex overflow-hidden">
+
+        {/* File Explorer (Left sidebar — narrow) */}
+        <aside className="w-44 bg-[#252535] border-r border-slate-700/60 flex flex-col shrink-0 overflow-hidden">
+          <div className="px-3 py-2 border-b border-slate-700/50 flex justify-between items-center bg-[#1e1e2e]">
+            <span className="font-bold text-[10px] text-slate-400 uppercase tracking-wider">Files</span>
+            <button
+              onClick={() => setShowNewFileModal(true)}
+              className="w-4 h-4 rounded hover:bg-slate-600 flex items-center justify-center text-slate-400 hover:text-white cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-xs">add</span>
+            </button>
+          </div>
+          <ul className="p-2 space-y-0.5 overflow-y-auto flex-grow text-xs">
+            {Object.keys(files).map(name => (
+              <li
+                key={name}
+                onClick={() => setActiveFile(name)}
+                className={`flex justify-between items-center px-2 py-1.5 rounded cursor-pointer group ${
+                  activeFile === name
+                    ? 'bg-[#EC4899]/20 text-[#EC4899] font-semibold'
+                    : 'text-slate-400 hover:bg-slate-700 hover:text-slate-200'
+                }`}
+              >
+                <span className="truncate flex items-center gap-1.5 min-w-0">
+                  <span className="material-symbols-outlined text-[11px] shrink-0">description</span>
+                  <span className="truncate">{name}</span>
+                </span>
+                {name !== 'cv.tex' && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleDeleteFile(name); }}
+                    className="text-slate-600 hover:text-red-400 p-0.5 rounded opacity-0 group-hover:opacity-100 shrink-0"
+                  >
+                    <span className="material-symbols-outlined text-[10px]">close</span>
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </aside>
+
+        {/* Code Editor (Center) */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+
+          {/* File tab bar */}
+          <div className="bg-[#1e1e2e] border-b border-slate-700/50 flex items-center px-2 shrink-0">
+            {Object.keys(files).map(name => (
+              <button
+                key={name}
+                onClick={() => setActiveFile(name)}
+                className={`px-4 py-2 text-[11px] font-medium border-b-2 transition-colors cursor-pointer shrink-0 ${
+                  activeFile === name
+                    ? 'border-[#EC4899] text-[#EC4899] bg-[#1a1a2e]'
+                    : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                }`}
+              >
+                {name}
+              </button>
+            ))}
+            {/* Status indicator in tab bar */}
+            <div className="ml-auto flex items-center gap-2 px-3">
+              <span className={`w-2 h-2 rounded-full ${statusColor}`}></span>
+              <span className="text-[10px] text-slate-400 font-medium">{statusLabel}</span>
+            </div>
+          </div>
+
+          {/* Monaco Editor */}
+          <div className="flex-grow overflow-hidden">
+            <Editor
+              height="100%"
+              language="latex"
+              theme="vs-dark"
+              value={files[activeFile]}
+              onChange={handleEditorChange}
+              options={{
+                fontSize: 13,
+                fontFamily: "'JetBrains Mono', 'Fira Code', 'Consolas', monospace",
+                minimap: { enabled: false },
+                wordWrap: 'on',
+                lineNumbers: 'on',
+                bracketPairColorization: { enabled: true },
+                autoClosingBrackets: 'always',
+                scrollBeyondLastLine: false,
+                renderLineHighlight: 'gutter',
+                cursorBlinking: 'smooth',
+                smoothScrolling: true,
+              }}
             />
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={() => setShowProjectsModal(true)}
-              className="px-3 py-1.5 border border-outline-variant rounded-lg text-xs font-bold hover:bg-slate-50 cursor-pointer"
+          {/* Compilation Logs Drawer */}
+          <div className={`bg-[#0d1117] border-t border-slate-700/50 transition-all flex flex-col shrink-0 ${showLogs ? 'h-36' : 'h-7'}`}>
+            <div
+              onClick={() => setShowLogs(v => !v)}
+              className="bg-[#161b22] px-4 h-7 flex justify-between items-center text-[10px] font-bold uppercase tracking-wider text-slate-400 cursor-pointer hover:bg-slate-800 flex-shrink-0"
             >
-              Open Project
-            </button>
-            <button
-              onClick={handleSaveProject}
-              className="px-3 py-1.5 border border-outline-variant rounded-lg text-xs font-bold hover:bg-slate-50 cursor-pointer"
-            >
-              Save
-            </button>
-            <button
-              onClick={handleGenerateFromResume}
-              className="px-3 py-1.5 border border-primary/20 text-primary bg-primary/5 rounded-lg text-xs font-bold hover:bg-primary/10 cursor-pointer"
-              title="Generate LaTeX structure using active manual builder draft"
-            >
-              Sync builder data
-            </button>
-            <button
-              onClick={handleImportToBuilder}
-              className="px-3 py-1.5 border border-secondary/20 text-secondary bg-secondary/5 rounded-lg text-xs font-bold hover:bg-secondary/10 cursor-pointer"
-              title="Parse this LaTeX document and import structured data back to builder"
-            >
-              Import to Builder
-            </button>
+              <span className="flex items-center gap-2">
+                <span className={`w-1.5 h-1.5 rounded-full ${errors.length > 0 ? 'bg-red-500' : 'bg-emerald-500'}`}></span>
+                Compilation Logs
+                {errors.length > 0 && <span className="text-red-400">({errors.length} error{errors.length > 1 ? 's' : ''})</span>}
+              </span>
+              <span className="material-symbols-outlined text-xs">{showLogs ? 'expand_more' : 'expand_less'}</span>
+            </div>
+            {showLogs && (
+              <div className="flex-grow p-3 font-mono text-[10px] text-slate-300 overflow-y-auto space-y-1.5 select-text">
+                {errors.length > 0 ? (
+                  errors.map((err, idx) => (
+                    <div key={idx} className="text-red-400 border-l-2 border-red-500/60 pl-2 flex items-start gap-2">
+                      <span>
+                        <span className="font-bold">Line {err.line}: </span>{err.message}
+                      </span>
+                      <button
+                        onClick={handleAIFixErrors}
+                        className="ml-auto shrink-0 bg-red-900/50 hover:bg-red-900 border border-red-500/50 text-red-300 px-1.5 py-0.5 rounded text-[8px] font-bold cursor-pointer"
+                      >
+                        Fix with AI
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <pre className="whitespace-pre-wrap text-emerald-400">{logs || '✓ No errors found.'}</pre>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Editor IDE Sandbox area */}
-        <div className="flex-grow flex overflow-hidden w-full relative">
-          
-          {/* File explorer panel (Left) */}
-          <aside className="w-48 bg-slate-50 border-r border-outline-variant/40 flex flex-col shrink-0">
-            <div className="p-3 border-b border-outline-variant/35 flex justify-between items-center bg-slate-100/50">
-              <span className="font-bold text-[10px] text-on-surface-variant uppercase tracking-wider">Project Files</span>
+        {/* PDF Preview (Right) */}
+        <section className="w-[46%] border-l border-slate-700/60 bg-[#2d2d2d] flex flex-col overflow-hidden shrink-0">
+          {/* Preview toolbar */}
+          <div className="bg-[#1e1e2e] border-b border-slate-700/50 px-3 py-2 flex justify-between items-center shrink-0">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-xs">picture_as_pdf</span>
+              PDF Preview
+            </span>
+
+            <div className="flex items-center gap-1">
               <button
-                onClick={() => setShowNewFileModal(true)}
-                className="w-5 h-5 rounded hover:bg-slate-200 flex items-center justify-center text-on-surface-variant cursor-pointer"
+                onClick={() => setZoom(z => Math.max(z - 10, 50))}
+                className="w-6 h-6 rounded hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white cursor-pointer"
+                title="Zoom Out"
               >
-                <span className="material-symbols-outlined text-sm font-bold">add</span>
+                <span className="material-symbols-outlined text-sm">remove</span>
+              </button>
+              <span className="text-[10px] font-bold text-slate-400 w-10 text-center">{zoom}%</span>
+              <button
+                onClick={() => setZoom(z => Math.min(z + 10, 175))}
+                className="w-6 h-6 rounded hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white cursor-pointer"
+                title="Zoom In"
+              >
+                <span className="material-symbols-outlined text-sm">add</span>
+              </button>
+              <button
+                onClick={() => setZoom(100)}
+                className="text-[9px] text-slate-500 hover:text-slate-300 px-1 cursor-pointer"
+                title="Reset Zoom"
+              >
+                Reset
+              </button>
+              <div className="w-px h-4 bg-slate-700/60 mx-1"></div>
+              <button
+                onClick={handleDownloadPDF}
+                disabled={!pdfUrl}
+                className="w-6 h-6 rounded hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white disabled:opacity-30 cursor-pointer"
+                title="Download PDF"
+              >
+                <span className="material-symbols-outlined text-sm">download</span>
+              </button>
+              <button
+                onClick={handleDownloadProject}
+                className="w-6 h-6 rounded hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white cursor-pointer"
+                title="Download ZIP"
+              >
+                <span className="material-symbols-outlined text-sm">archive</span>
+              </button>
+            </div>
+          </div>
+
+          {/* PDF Frame */}
+          <div className="flex-grow overflow-auto bg-[#3a3a3a] flex items-start justify-center p-4">
+            {pdfUrl ? (
+              <div
+                style={{
+                  transform: `scale(${zoom / 100})`,
+                  transformOrigin: 'top center',
+                  width: '100%',
+                  height: `${100 * (100 / zoom)}%`,
+                  minHeight: '800px',
+                }}
+              >
+                <iframe
+                  src={pdfUrl ? `${pdfUrl}#navpanes=0` : ''}
+                  className="w-full h-full border-none shadow-2xl rounded"
+                  title="LaTeX PDF Preview"
+                />
+              </div>
+            ) : (
+              <div className="m-auto text-center space-y-3 py-20">
+                {compileStatus === 'compiling' ? (
+                  <>
+                    <span className="w-10 h-10 border-3 border-[#EC4899] border-t-transparent rounded-full animate-spin block mx-auto"></span>
+                    <p className="text-xs text-slate-400">Compiling your resume…</p>
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-4xl text-slate-500">picture_as_pdf</span>
+                    <p className="text-xs text-slate-400">
+                      {compileStatus === 'failed'
+                        ? 'Compilation failed. Check errors in the log panel.'
+                        : 'Click Recompile to generate your PDF preview.'}
+                    </p>
+                    {compileStatus === 'failed' && (
+                      <button
+                        onClick={() => setShowLogs(true)}
+                        className="text-[11px] text-red-400 border border-red-500/30 px-3 py-1 rounded hover:bg-red-900/20 cursor-pointer"
+                      >
+                        View Errors
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* AI Assistant Drawer */}
+        {showAIPanel && (
+          <aside className="w-72 border-l border-slate-700/60 bg-[#1a1a2e] flex flex-col shrink-0 animate-fade-in-left">
+            <div className="p-3 border-b border-slate-700/50 flex justify-between items-center bg-[#252535]">
+              <span className="font-bold text-[11px] flex items-center gap-1.5 text-transparent bg-clip-text bg-gradient-to-r from-[#EC4899] to-[#FF8A3D]">
+                <span className="material-symbols-outlined text-sm font-bold" style={{ color: '#EC4899' }}>auto_awesome</span>
+                AI LaTeX Assistant
+              </span>
+              <button
+                onClick={() => { setShowAIPanel(false); setProposedCodeFix(null); }}
+                className="w-6 h-6 rounded hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-xs">close</span>
               </button>
             </div>
 
-            <ul className="p-2 space-y-1 overflow-y-auto flex-grow text-xs">
-              {Object.keys(files).map(name => (
-                <li
-                  key={name}
-                  onClick={() => setActiveFile(name)}
-                  className={`flex justify-between items-center px-2 py-1.5 rounded cursor-pointer ${
-                    activeFile === name ? 'bg-primary/10 text-primary font-semibold' : 'text-on-surface-variant hover:bg-slate-200'
-                  }`}
-                >
-                  <span className="truncate flex items-center gap-1.5">
-                    <span className="material-symbols-outlined text-xs">description</span>
-                    {name}
-                  </span>
-                  {name !== "cv.tex" && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleDeleteFile(name); }}
-                      className="text-error hover:bg-error-container/10 p-0.5 rounded opacity-0 group-hover:opacity-100"
-                    >
-                      <span className="material-symbols-outlined text-xs">close</span>
-                    </button>
-                  )}
-                </li>
+            <div className="flex-grow p-3 overflow-y-auto space-y-3 text-xs">
+              {chatHistory.map((msg, idx) => (
+                <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[88%] rounded-xl p-3 text-[11px] leading-relaxed ${
+                    msg.role === 'user'
+                      ? 'bg-gradient-to-r from-[#EC4899] to-[#FF8A3D] text-white rounded-tr-none'
+                      : 'bg-[#252535] border border-slate-700/40 text-slate-300 rounded-tl-none'
+                  }`}>
+                    <p>{msg.content}</p>
+                  </div>
+                </div>
               ))}
-            </ul>
-          </aside>
-
-          {/* Code Editor Panel (Center) */}
-          <div className="flex-1 flex flex-col overflow-hidden relative">
-            
-            {/* Editor Toolbar */}
-            <div className="bg-slate-50 border-b border-outline-variant/30 px-4 py-2 flex justify-between items-center shrink-0">
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] font-semibold text-primary">{activeFile}</span>
-                <span className={`w-2 h-2 rounded-full ${
-                  compileStatus === 'Success' ? 'bg-teal-500' : compileStatus === 'Failed' ? 'bg-error' : compileStatus === 'Compiling' ? 'bg-amber-500' : 'bg-slate-400'
-                }`}></span>
-                <span className="text-[10px] text-on-surface-variant font-medium capitalize">{compileStatus}</span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <label className="flex items-center gap-1.5 text-[10px] text-on-surface-variant cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={autoCompile}
-                    onChange={(e) => setAutoCompile(e.target.checked)}
-                    className="cursor-pointer"
-                  />
-                  Auto Compile
-                </label>
-
-                <button
-                  onClick={handleCompile}
-                  disabled={compileStatus === "Compiling"}
-                  className="bg-primary text-on-primary px-3 py-1 rounded text-[10px] font-bold hover:opacity-90 disabled:opacity-50 cursor-pointer"
-                >
-                  Compile
-                </button>
-              </div>
-            </div>
-
-            {/* Monaco Editor Container */}
-            <div className="flex-grow w-full overflow-hidden">
-              <Editor
-                height="100%"
-                language="latex"
-                theme="vs-dark"
-                value={files[activeFile]}
-                onChange={handleEditorChange}
-                options={{
-                  fontSize: 12,
-                  minimap: { enabled: false },
-                  wordWrap: "on",
-                  lineNumbers: "on",
-                  bracketPairColorization: { enabled: true },
-                  autoClosingBrackets: "always"
-                }}
-              />
-            </div>
-
-            {/* Compilation logs collapsible drawer (Bottom) */}
-            <div className={`bg-slate-900 border-t border-slate-700 transition-all flex flex-col shrink-0 ${
-              showLogs ? 'h-40' : 'h-8'
-            }`}>
-              <div
-                onClick={() => setShowLogs(!showLogs)}
-                className="bg-slate-800 px-4 py-1 flex justify-between items-center text-[10px] font-bold uppercase tracking-wider text-slate-300 cursor-pointer hover:bg-slate-750"
-              >
-                <span>Compilation Logs & Errors ({errors.length})</span>
-                <span className="material-symbols-outlined text-xs">
-                  {showLogs ? 'expand_more' : 'expand_less'}
-                </span>
-              </div>
-              
-              {showLogs && (
-                <div className="flex-grow p-3 font-mono text-[10px] text-slate-300 overflow-y-auto space-y-2 select-text">
-                  {errors.length > 0 ? (
-                    errors.map((err, idx) => (
-                      <div key={idx} className="text-red-400 border-l-2 border-red-500 pl-2">
-                        <span className="font-bold">Line {err.line}:</span> {err.message}
-                        <button
-                          onClick={handleAIFixErrors}
-                          className="ml-3 bg-red-900/50 hover:bg-red-900 border border-red-500 text-red-200 px-1.5 py-0.5 rounded text-[8px] font-bold cursor-pointer"
-                        >
-                          Fix with AI
-                        </button>
-                      </div>
-                    ))
-                  ) : (
-                    <pre className="whitespace-pre-wrap">{logs || "✓ Compiled successfully. No errors found."}</pre>
-                  )}
-                </div>
-              )}
-            </div>
-
-          </div>
-
-          {/* PDF Preview panel (Right) */}
-          <section className="w-[45%] border-l border-outline-variant/40 bg-slate-100 flex flex-col overflow-hidden shrink-0">
-            {/* Toolbar */}
-            <div className="bg-slate-50 border-b border-outline-variant/30 px-4 py-2 flex justify-between items-center shrink-0">
-              <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">PDF PREVIEW</span>
-              
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setZoom(z => Math.max(z - 10, 50))}
-                  className="p-1 text-on-surface-variant hover:text-primary rounded cursor-pointer"
-                  title="Zoom Out"
-                >
-                  <span className="material-symbols-outlined text-sm font-bold">zoom_out</span>
-                </button>
-                <span className="text-[10px] font-bold text-on-surface-variant w-8 text-center">{zoom}%</span>
-                <button
-                  onClick={() => setZoom(z => Math.min(z + 10, 150))}
-                  className="p-1 text-on-surface-variant hover:text-primary rounded cursor-pointer"
-                  title="Zoom In"
-                >
-                  <span className="material-symbols-outlined text-sm font-bold">zoom_in</span>
-                </button>
-                <div className="w-px h-3 bg-outline-variant/60 mx-1"></div>
-                <button
-                  onClick={handleDownloadPDF}
-                  disabled={!pdfUrl}
-                  className="p-1 text-primary hover:bg-primary/5 rounded cursor-pointer disabled:opacity-50"
-                  title="Download PDF document"
-                >
-                  <span className="material-symbols-outlined text-sm font-bold">download</span>
-                </button>
-                <button
-                  onClick={handleDownloadProject}
-                  className="p-1 text-on-surface-variant hover:bg-slate-200 rounded cursor-pointer"
-                  title="Download ZIP source files"
-                >
-                  <span className="material-symbols-outlined text-sm font-bold">archive</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Preview Frame */}
-            <div className="flex-grow w-full bg-slate-200 flex justify-center items-stretch relative">
-              {pdfUrl ? (
-                <iframe
-                  src={pdfUrl}
-                  className="w-full h-full border-none transition-transform origin-top"
-                  style={{ transform: `scale(${zoom / 100})`, width: `${100 * (100 / zoom)}%`, height: `${100 * (100 / zoom)}%` }}
-                  title="LaTeX PDF Preview"
-                />
-              ) : (
-                <div className="m-auto text-center space-y-2">
-                  <span className="material-symbols-outlined text-3xl text-on-surface-variant">description</span>
-                  <p className="text-xs text-on-surface-variant">No PDF compiled yet. Click compile above.</p>
-                </div>
-              )}
-            </div>
-          </section>
-
-          {/* AI LaTeX Assistant sidebar Drawer */}
-          {showAIPanel && (
-            <aside className="w-72 border-l border-outline-variant bg-surface flex flex-col shrink-0 animate-fade-in-left">
-              <div className="p-3 border-b border-outline-variant/40 flex justify-between items-center bg-slate-50">
-                <span className="font-bold text-[10px] text-primary flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-sm font-bold text-primary">auto_awesome</span>
-                  AI LaTeX Assistant
-                </span>
-                <button
-                  onClick={() => { setShowAIPanel(false); setProposedCodeFix(null); }}
-                  className="w-6 h-6 rounded hover:bg-slate-200 flex items-center justify-center text-on-surface-variant cursor-pointer"
-                >
-                  <span className="material-symbols-outlined text-xs">close</span>
-                </button>
-              </div>
-
-              {/* Chat panel logs */}
-              <div className="flex-grow p-4 overflow-y-auto space-y-3 text-xs editor-scroll">
-                {chatHistory.map((msg, idx) => (
-                  <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[85%] rounded-xl p-3 text-[11px] leading-relaxed ${
-                      msg.role === 'user'
-                        ? 'bg-primary text-on-primary rounded-tr-none'
-                        : 'bg-slate-50 border border-outline-variant/20 text-on-surface rounded-tl-none shadow-sm'
-                    }`}>
-                      <p>{msg.content}</p>
-                    </div>
-                  </div>
-                ))}
-                
-                {isAiLoading && (
-                  <div className="flex justify-start">
-                    <div className="max-w-[85%] rounded-xl p-3 bg-slate-50 border border-outline-variant/20 text-on-surface rounded-tl-none shadow-sm flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce"></span>
-                      <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce [animation-delay:0.2s]"></span>
-                      <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce [animation-delay:0.4s]"></span>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Propose Fix footer bar */}
-              {proposedCodeFix && (
-                <div className="p-3 border-t border-outline-variant bg-amber-50/50 flex flex-col gap-2 shrink-0">
-                  <p className="text-[10px] text-amber-800 font-semibold">I have resolved the syntax error. Apply the fix?</p>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setProposedCodeFix(null)}
-                      className="flex-1 border border-outline-variant py-1 text-[9px] font-bold rounded hover:bg-white cursor-pointer"
-                    >
-                      Discard
-                    </button>
-                    <button
-                      onClick={handleApplyFix}
-                      className="flex-1 bg-primary text-on-primary py-1 text-[9px] font-bold rounded hover:opacity-90 cursor-pointer"
-                    >
-                      Apply Fix
-                    </button>
+              {isAiLoading && (
+                <div className="flex justify-start">
+                  <div className="max-w-[88%] rounded-xl p-3 bg-[#252535] border border-slate-700/40 rounded-tl-none flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 bg-[#EC4899] rounded-full animate-bounce"></span>
+                    <span className="w-1.5 h-1.5 bg-[#EC4899] rounded-full animate-bounce [animation-delay:0.2s]"></span>
+                    <span className="w-1.5 h-1.5 bg-[#EC4899] rounded-full animate-bounce [animation-delay:0.4s]"></span>
                   </div>
                 </div>
               )}
+            </div>
 
-              {/* Input Chat message */}
-              <div className="p-3 border-t border-outline-variant/35 flex gap-1.5 bg-white shrink-0">
-                <input
-                  type="text"
-                  placeholder="Ask assistant to edit LaTeX..."
-                  value={aiMessage}
-                  onChange={(e) => setAiMessage(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-                  className="flex-1 bg-slate-50 border border-outline-variant rounded-lg px-2.5 py-1.5 text-[11px] focus:outline-none focus:border-primary"
-                />
-                <button
-                  onClick={handleSendMessage}
-                  disabled={isAiLoading}
-                  className="bg-primary text-on-primary w-8 h-8 rounded-lg flex items-center justify-center hover:opacity-90 disabled:opacity-50 shrink-0 cursor-pointer"
-                >
-                  <span className="material-symbols-outlined text-sm">send</span>
-                </button>
+            {proposedCodeFix && (
+              <div className="p-3 border-t border-slate-700/40 bg-amber-900/20 flex flex-col gap-2 shrink-0">
+                <p className="text-[10px] text-amber-400 font-semibold">AI has a fix ready. Apply it?</p>
+                <div className="flex gap-2">
+                  <button onClick={() => setProposedCodeFix(null)} className="flex-1 border border-slate-600 py-1 text-[9px] font-bold rounded hover:bg-slate-700 text-slate-300 cursor-pointer">Discard</button>
+                  <button onClick={handleApplyFix} className="flex-1 bg-gradient-to-r from-[#EC4899] to-[#FF8A3D] text-white py-1 text-[9px] font-bold rounded hover:opacity-90 cursor-pointer">Apply Fix</button>
+                </div>
               </div>
-            </aside>
-          )}
+            )}
 
-          {/* Quick AI drawer toggle button */}
-          {!showAIPanel && (
-            <button
-              onClick={() => setShowAIPanel(true)}
-              className="absolute right-4 top-16 bg-primary text-on-primary w-10 h-10 rounded-full flex items-center justify-center shadow-lg hover:scale-105 transition-transform z-20 cursor-pointer"
-              title="Open AI LaTeX Assistant"
-            >
-              <span className="material-symbols-outlined text-base">auto_awesome</span>
-            </button>
-          )}
-        </div>
-
-      {/* MODAL: New File */}
-      {showNewFileModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[999] flex items-center justify-center p-4">
-          <div className="bg-surface rounded-2xl w-full max-w-sm p-6 border border-outline-variant shadow-2xl space-y-4">
-            <h3 className="font-bold text-on-surface text-sm">Add Project File</h3>
-            <div className="space-y-1">
-              <label className="text-[10px] text-on-surface-variant font-bold">Filename</label>
+            <div className="p-3 border-t border-slate-700/40 flex gap-1.5 bg-[#252535] shrink-0">
               <input
                 type="text"
-                placeholder="e.g. references.bib"
-                value={newFileName}
-                onChange={(e) => setNewFileName(e.target.value)}
-                className="w-full bg-slate-50 border border-outline-variant rounded-lg p-2.5 text-xs focus:outline-none focus:border-primary"
+                placeholder="Ask assistant to edit LaTeX…"
+                value={aiMessage}
+                onChange={(e) => setAiMessage(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+                className="flex-1 bg-[#1a1a2e] border border-slate-600/50 rounded-lg px-2.5 py-1.5 text-[11px] text-slate-300 focus:outline-none focus:border-[#EC4899]/50 placeholder-slate-600"
               />
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
               <button
-                onClick={() => { setNewFileName(""); setShowNewFileModal(false); }}
-                className="px-3 py-1.5 border border-outline-variant rounded-lg text-xs hover:bg-slate-50 cursor-pointer"
+                onClick={handleSendMessage}
+                disabled={isAiLoading}
+                className="w-8 h-8 rounded-lg flex items-center justify-center hover:opacity-90 disabled:opacity-50 shrink-0 cursor-pointer bg-gradient-to-r from-[#EC4899] to-[#FF8A3D]"
+              >
+                <span className="material-symbols-outlined text-sm text-white">send</span>
+              </button>
+            </div>
+          </aside>
+        )}
+      </div>
+
+      {/* ── MODAL: New File ─────────────────────────────────────────────── */}
+      {showNewFileModal && (
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[999] flex items-center justify-center p-4">
+          <div className="bg-[#1e1e2e] rounded-2xl w-full max-w-sm p-6 border border-slate-600/50 shadow-2xl space-y-4">
+            <h3 className="font-bold text-slate-200 text-sm">Add Project File</h3>
+            <input
+              type="text"
+              placeholder="e.g. references.bib"
+              value={newFileName}
+              onChange={(e) => setNewFileName(e.target.value)}
+              className="w-full bg-[#252535] border border-slate-600/50 rounded-lg p-2.5 text-xs text-slate-200 focus:outline-none focus:border-[#EC4899]/60"
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => { setNewFileName(''); setShowNewFileModal(false); }}
+                className="px-3 py-1.5 border border-slate-600 rounded-lg text-xs text-slate-300 hover:bg-slate-700 cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 onClick={handleCreateFile}
-                className="bg-primary text-on-primary px-4 py-1.5 rounded-lg text-xs font-bold hover:opacity-90 cursor-pointer"
+                className="bg-gradient-to-r from-[#EC4899] to-[#FF8A3D] text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:opacity-90 cursor-pointer"
               >
                 Create File
               </button>
@@ -825,38 +882,37 @@ Senior Product Designer with 6+ years of experience transforming complex problem
         </div>
       )}
 
-      {/* MODAL: Load Projects */}
+      {/* ── MODAL: Load Projects ─────────────────────────────────────────── */}
       {showProjectsModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[999] flex items-center justify-center p-4">
-          <div className="bg-surface rounded-2xl w-full max-w-md p-6 border border-outline-variant shadow-2xl space-y-4">
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[999] flex items-center justify-center p-4">
+          <div className="bg-[#1e1e2e] rounded-2xl w-full max-w-md p-6 border border-slate-600/50 shadow-2xl space-y-4">
             <div className="flex justify-between items-center">
-              <h3 className="font-bold text-on-surface text-sm">Open LaTeX Resume Project</h3>
+              <h3 className="font-bold text-slate-200 text-sm">Open LaTeX Project</h3>
               <button
                 onClick={() => setShowProjectsModal(false)}
-                className="w-6 h-6 rounded hover:bg-slate-200 flex items-center justify-center text-on-surface-variant cursor-pointer"
+                className="w-6 h-6 rounded hover:bg-slate-700 flex items-center justify-center text-slate-400 cursor-pointer"
               >
                 <span className="material-symbols-outlined text-xs">close</span>
               </button>
             </div>
-            
-            {/* List of projects */}
+
             <div className="max-h-60 overflow-y-auto space-y-2">
               {projectList.length > 0 ? (
                 projectList.map(proj => (
                   <div
                     key={proj.id}
-                    className="p-3 bg-slate-50 border border-outline-variant/30 rounded-lg flex justify-between items-center hover:bg-slate-100 cursor-pointer transition-colors"
+                    className="p-3 bg-[#252535] border border-slate-600/30 rounded-lg flex justify-between items-center hover:border-[#EC4899]/30 cursor-pointer transition-colors"
                     onClick={() => handleLoadProject(proj.id)}
                   >
                     <div>
-                      <p className="text-xs font-bold text-on-surface">{proj.name}</p>
-                      <p className="text-[9px] text-on-surface-variant">Updated: {new Date(proj.updated_at).toLocaleString()}</p>
+                      <p className="text-xs font-bold text-slate-200">{proj.name}</p>
+                      <p className="text-[9px] text-slate-500">Updated: {new Date(proj.updated_at).toLocaleString()}</p>
                     </div>
-                    <span className="material-symbols-outlined text-primary text-sm">arrow_forward</span>
+                    <span className="material-symbols-outlined text-[#EC4899] text-sm">arrow_forward</span>
                   </div>
                 ))
               ) : (
-                <p className="text-xs text-on-surface-variant text-center py-6">No saved projects. Compile and save one above.</p>
+                <p className="text-xs text-slate-500 text-center py-6">No saved projects yet.</p>
               )}
             </div>
           </div>

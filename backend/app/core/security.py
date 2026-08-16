@@ -1,4 +1,4 @@
-﻿"""
+"""
 app/core/security.py
 ─────────────────────
 JWT token validation for Supabase authentication.
@@ -64,22 +64,21 @@ def _verify_token(token: str) -> dict:
 
     # ── Try ES256 verification via JWKS ──────────────────────────────────────
     if keys:
-        # Get the kid from the unverified header to pick the right key
         try:
             header = jwt.get_unverified_header(token)
             kid = header.get("kid")
             alg = header.get("alg", "ES256")
         except JWTError as e:
+            print(f"[!] Invalid JWT header: {e}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=f"Invalid token header: {e}",
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
-        # Find the matching key by kid, or try all keys
         matching_keys = [k for k in keys if k.get("kid") == kid] if kid else keys
         if not matching_keys:
-            matching_keys = keys  # fallback: try all
+            matching_keys = keys
 
         for key_data in matching_keys:
             try:
@@ -90,9 +89,20 @@ def _verify_token(token: str) -> dict:
                     algorithms=[alg],
                     options={"verify_aud": False},
                 )
+                if settings.DEBUG:
+                    print(f"[*] JWT decoded via ES256/JWKS successfully. sub={payload.get('sub')}")
                 return payload
-            except JWTError:
-                continue  # try the next key
+            except jwt.ExpiredSignatureError as e:
+                print(f"[!] JWT Token signature expired: {e}")
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Token has expired. Please log in again.",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+            except JWTError as e:
+                if settings.DEBUG:
+                    print(f"[!] JWKS verification attempt failed with key {key_data.get('kid')}: {e}")
+                continue
 
         # All JWKS keys failed — raise
         raise HTTPException(
@@ -109,13 +119,24 @@ def _verify_token(token: str) -> dict:
         options["verify_signature"] = False
 
     try:
-        return jwt.decode(
+        payload = jwt.decode(
             token,
             secret or "dummy_secret",
             algorithms=["HS256"],
             options=options,
         )
+        if settings.DEBUG:
+            print(f"[*] JWT decoded via HS256 fallback successfully. sub={payload.get('sub')}")
+        return payload
+    except jwt.ExpiredSignatureError as e:
+        print(f"[!] JWT Token expired: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has expired. Please log in again.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     except JWTError as e:
+        print(f"[!] JWT HS256 decode error: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Invalid or expired token: {e}",

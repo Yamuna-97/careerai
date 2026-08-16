@@ -175,3 +175,75 @@ def generate_resume_pdf(resume: Resume) -> bytes:
     doc.build(story)
     buffer.seek(0)
     return buffer.read()
+
+
+# ── Text Extraction Helpers for Uploaded Files ─────────────────────────────────
+
+def extract_text_from_pdf(content_bytes: bytes) -> str:
+    """Extract plain text from PDF file bytes."""
+    if not content_bytes:
+        return ""
+
+    # 1. Try pypdf
+    try:
+        import pypdf
+        reader = pypdf.PdfReader(io.BytesIO(content_bytes))
+        pages_text = []
+        for page in reader.pages:
+            t = page.extract_text()
+            if t and t.strip():
+                pages_text.append(t.strip())
+        if pages_text:
+            return "\n\n".join(pages_text)
+    except Exception as e:
+        print(f"[pdf_service] pypdf extraction warning: {e}")
+
+    # 2. Raw regex fallback for unencrypted PDFs
+    try:
+        import re
+        raw_str = content_bytes.decode("latin1", errors="ignore")
+        matches = re.findall(r'\((.*?)\)\s*Tj', raw_str)
+        if matches:
+            return " ".join(matches)
+    except Exception:
+        pass
+
+    return ""
+
+
+def extract_text_from_docx(content_bytes: bytes) -> str:
+    """Extract plain text from Word (.docx) file bytes."""
+    if not content_bytes:
+        return ""
+
+    # 1. Try python-docx
+    try:
+        import docx
+        doc = docx.Document(io.BytesIO(content_bytes))
+        paragraphs = [p.text.strip() for p in doc.paragraphs if p.text and p.text.strip()]
+        for table in doc.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    if cell.text and cell.text.strip():
+                        paragraphs.append(cell.text.strip())
+        if paragraphs:
+            return "\n".join(paragraphs)
+    except Exception as e:
+        print(f"[pdf_service] docx extraction warning: {e}")
+
+    # 2. XML fallback via zipfile parsing
+    try:
+        import zipfile
+        import xml.etree.ElementTree as ET
+        with zipfile.ZipFile(io.BytesIO(content_bytes)) as z:
+            if "word/document.xml" in z.namelist():
+                xml_content = z.read("word/document.xml")
+                tree = ET.fromstring(xml_content)
+                text_nodes = tree.findall(".//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t")
+                text_list = [node.text for node in text_nodes if node.text]
+                if text_list:
+                    return "\n".join(text_list)
+    except Exception as e:
+        print(f"[pdf_service] docx zip XML extraction failed: {e}")
+
+    return ""

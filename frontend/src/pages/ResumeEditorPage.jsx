@@ -1,12 +1,43 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import Header from '../components/Header';
 import ResumePreview from '../components/ResumePreview';
+import { exportResumePDF } from '../utils/exportResumePDF';
 
 export default function ResumeEditorPage() {
   const [activeTab, setActiveTab] = useState('personal');
+  const [completedTabs, setCompletedTabs] = useState([]);
   const [selectedTemplate, setSelectedTemplate] = useState(() => localStorage.getItem('careerai_template_id') || 'Modern');
   const [zoom, setZoom] = useState(85);
+  const [saveToast, setSaveToast] = useState(false);
+
+  const tabsOrder = ['personal', 'experience', 'skills', 'education'];
+  const tabLabels = { personal: 'Personal Info', experience: 'Experience', skills: 'Skills', education: 'Education' };
+  const tabIcons  = { personal: 'person', experience: 'work', skills: 'psychology', education: 'school' };
+
+  const handleNext = () => {
+    const currentIndex = tabsOrder.indexOf(activeTab);
+    // Mark current tab as completed
+    if (!completedTabs.includes(activeTab)) {
+      setCompletedTabs(prev => [...prev, activeTab]);
+    }
+    if (currentIndex < tabsOrder.length - 1) {
+      setActiveTab(tabsOrder[currentIndex + 1]);
+    } else {
+      exportResumePDF();
+    }
+  };
+
+  const handleBack = () => {
+    const currentIndex = tabsOrder.indexOf(activeTab);
+    if (currentIndex > 0) {
+      setActiveTab(tabsOrder[currentIndex - 1]);
+    }
+  };
+
+  const handleTabClick = (tab) => {
+    setActiveTab(tab);
+  };
 
   const [resumeData, setResumeData] = useState({
     firstName: 'Jane',
@@ -53,6 +84,22 @@ export default function ResumeEditorPage() {
     },
   });
 
+  const handleSaveResume = () => {
+    const saved = JSON.parse(localStorage.getItem('careerai_saved_resumes') || '[]');
+    const entry = {
+      id: Date.now(),
+      savedAt: new Date().toISOString(),
+      template: selectedTemplate,
+      data: resumeData,
+    };
+    // Keep max 10 saves, newest first
+    const updated = [entry, ...saved].slice(0, 10);
+    localStorage.setItem('careerai_saved_resumes', JSON.stringify(updated));
+    // Show toast confirmation
+    setSaveToast(true);
+    setTimeout(() => setSaveToast(false), 2500);
+  };
+
   const handleImproveWithAI = () => {
     setResumeData((prev) => ({
       ...prev,
@@ -65,8 +112,16 @@ export default function ResumeEditorPage() {
     <div className="flex-1 flex flex-col w-full min-h-[calc(100vh-4rem)]">
 
 
+      {/* Save toast */}
+      {saveToast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white px-5 py-2.5 rounded-full text-xs font-semibold shadow-lg flex items-center gap-2 animate-fade-in">
+          <span className="material-symbols-outlined text-[#EC4899] text-sm">check_circle</span>
+          Resume saved successfully!
+        </div>
+      )}
+
       {/* Local Page Action Bar */}
-      <div className="bg-surface/80 backdrop-blur-md sticky top-0 right-0 left-0 z-10 flex justify-between items-center px-margin-mobile md:px-margin-desktop h-16 border-b border-outline-variant">
+      <div className="bg-surface/80 backdrop-blur-md sticky top-0 right-0 left-0 z-10 flex justify-between items-center px-margin-mobile md:px-margin-desktop h-16 border-b border-outline-variant no-print">
         <div className="flex items-center gap-4">
           <div className="flex flex-col">
             <h2 className="font-headline-sm text-headline-sm font-extrabold text-on-background">Resume Builder</h2>
@@ -78,6 +133,13 @@ export default function ResumeEditorPage() {
         </div>
         <div className="flex items-center gap-3">
           <button
+            onClick={handleSaveResume}
+            className="flex items-center gap-2 bg-[#EC4899]/10 text-[#EC4899] border border-[#EC4899]/30 px-4 py-2 rounded-lg font-label-md text-label-md hover:bg-[#EC4899]/20 transition-colors shadow-sm cursor-pointer"
+          >
+            <span className="material-symbols-outlined text-sm">bookmark</span>
+            <span className="hidden sm:inline">Save Resume</span>
+          </button>
+          <button
             onClick={handleImproveWithAI}
             className="hidden sm:flex items-center gap-2 bg-gradient-to-r from-primary-container to-secondary text-on-primary px-4 py-2 rounded-lg font-label-md text-label-md hover:opacity-90 transition-opacity shadow-sm cursor-pointer"
           >
@@ -85,7 +147,7 @@ export default function ResumeEditorPage() {
             ✨ Improve with AI
           </button>
           <button
-            onClick={() => window.print()}
+            onClick={() => exportResumePDF()}
             className="flex items-center gap-2 border border-outline-variant text-on-surface px-4 py-2 rounded-lg font-label-md text-label-md hover:bg-surface-container transition-colors shadow-sm bg-surface cursor-pointer"
           >
             <span className="material-symbols-outlined text-sm">download</span>
@@ -97,22 +159,54 @@ export default function ResumeEditorPage() {
       {/* Builder Workspace */}
       <main className="flex-1 flex flex-col lg:flex-row overflow-hidden bg-surface-container-lowest pb-16 md:pb-0">
         {/* Left Panel: Editor */}
-        <section className="w-full lg:w-[45%] xl:w-[40%] flex flex-col border-r border-outline-variant bg-surface relative h-full">
-          {/* Section Tabs */}
-          <div className="p-stack-md border-b border-outline-variant bg-surface/95 backdrop-blur z-10">
-            <div className="flex space-x-2 overflow-x-auto pb-1 scrollbar-hide">
-              {['personal', 'experience', 'skills', 'education'].map((tab) => (
-                <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={`whitespace-nowrap px-4 py-1.5 rounded-full font-label-md text-label-md transition-colors capitalize ${activeTab === tab
-                      ? 'bg-primary-container/10 text-primary border border-primary/20 font-bold'
-                      : 'text-on-surface-variant hover:bg-surface-container'
-                    }`}
-                >
-                  {tab === 'personal' ? 'Personal Info' : tab}
-                </button>
-              ))}
+        <section className="w-full lg:w-[45%] xl:w-[40%] flex flex-col border-r border-outline-variant bg-surface relative h-full no-print">
+          {/* Progress Stepper — Career Journey Style */}
+          <div className="px-6 pt-5 pb-4 border-b border-outline-variant bg-surface/95 backdrop-blur z-10">
+            <div className="relative flex items-start justify-between">
+              {/* Connector line behind circles */}
+              <div className="absolute top-4 left-0 right-0 h-[2px] z-0" style={{ background: 'linear-gradient(to right, #EC4899 0%, #EC4899 ' + Math.round((tabsOrder.indexOf(activeTab) / (tabsOrder.length - 1)) * 100) + '%, #e5e7eb ' + Math.round((tabsOrder.indexOf(activeTab) / (tabsOrder.length - 1)) * 100) + '%, #e5e7eb 100%)' }} />
+              {tabsOrder.map((tab, idx) => {
+                const isCurrent = activeTab === tab;
+                const isDone = completedTabs.includes(tab);
+                const isUpcoming = !isCurrent && !isDone;
+                return (
+                  <button
+                    key={tab}
+                    onClick={() => handleTabClick(tab)}
+                    className="relative z-10 flex flex-col items-center gap-1.5 cursor-pointer group"
+                    style={{ width: `${100 / tabsOrder.length}%` }}
+                  >
+                    {/* Circle */}
+                    <div className={`w-9 h-9 rounded-full flex items-center justify-center border-2 transition-all shadow-sm ${
+                      isDone
+                        ? 'bg-[#EC4899] border-[#EC4899] text-white shadow-pink-200'
+                        : isCurrent
+                        ? 'bg-white border-[#EC4899] text-[#EC4899]'
+                        : 'bg-white border-gray-200 text-gray-400'
+                    }`}>
+                      {isDone ? (
+                        <span className="material-symbols-outlined text-sm font-bold">check</span>
+                      ) : isCurrent ? (
+                        <span className="w-3 h-3 rounded-full bg-[#EC4899] block" />
+                      ) : (
+                        <span className="text-xs font-bold">{idx + 1}</span>
+                      )}
+                    </div>
+                    {/* Label */}
+                    <span className={`text-[10px] font-semibold whitespace-nowrap transition-colors ${
+                      isCurrent ? 'text-[#EC4899]' : isDone ? 'text-[#EC4899]/70' : 'text-gray-400'
+                    }`}>
+                      {tabLabels[tab]}
+                    </span>
+                    {/* Sub-label */}
+                    <span className={`text-[9px] font-medium ${
+                      isCurrent ? 'text-[#EC4899] font-bold' : isDone ? 'text-[#EC4899]/60' : 'text-gray-400'
+                    }`}>
+                      {isDone ? 'Complete' : isCurrent ? 'Current' : 'Upcoming'}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -282,12 +376,32 @@ export default function ResumeEditorPage() {
               <span className="font-label-md text-label-md">Add Custom Section</span>
             </button>
           </div>
+
+          {/* Navigation Footer */}
+          <div className="p-4 border-t border-outline-variant bg-surface flex justify-between items-center shrink-0">
+            <button
+              onClick={handleBack}
+              disabled={activeTab === 'personal'}
+              className="px-4 py-2 border border-outline-variant rounded-lg text-xs font-bold hover:bg-surface-container transition-colors disabled:opacity-40 disabled:cursor-not-allowed text-on-surface cursor-pointer flex items-center gap-1.5"
+            >
+              <span className="material-symbols-outlined text-xs">arrow_back</span>
+              Back
+            </button>
+
+            <button
+              onClick={handleNext}
+              className="px-5 py-2 bg-primary text-white rounded-lg text-xs font-bold hover:opacity-90 transition-opacity flex items-center gap-1.5 cursor-pointer"
+            >
+              {activeTab === 'education' ? 'Export PDF' : 'Next'}
+              <span className="material-symbols-outlined text-xs">{activeTab === 'education' ? 'download' : 'arrow_forward'}</span>
+            </button>
+          </div>
         </section>
 
         {/* Right Panel: Live Document Preview */}
         <section className="flex-1 bg-surface-container flex flex-col relative h-full overflow-hidden">
           {/* Preview Toolbar */}
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 bg-surface/90 backdrop-blur shadow-md rounded-full px-4 py-2 flex items-center gap-4 border border-outline-variant">
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 bg-surface/90 backdrop-blur shadow-md rounded-full px-4 py-2 flex items-center gap-4 border border-outline-variant no-print">
             <button
               onClick={() => setZoom((z) => Math.max(z - 10, 50))}
               className="p-1 text-on-surface-variant hover:text-primary rounded-full hover:bg-surface-container transition-colors"
@@ -313,13 +427,13 @@ export default function ResumeEditorPage() {
           </div>
 
           {/* Template Selector Thumbnail Strip */}
-          <div className="h-20 bg-surface border-t border-outline-variant px-6 flex items-center gap-6 shrink-0 z-20">
+          <div className="h-20 bg-surface border-t border-outline-variant px-6 flex items-center gap-6 shrink-0 z-20 no-print">
             <span className="font-label-sm text-label-sm text-on-surface-variant font-bold">Active Layout: {selectedTemplate}</span>
             <Link
               to="/resume/templates"
               className="px-4 py-1.5 border border-outline-variant hover:bg-surface-container text-on-surface rounded-lg font-label-md text-xs font-bold transition-all shadow-sm bg-surface cursor-pointer"
             >
-              Browse 20+ Template Layouts →
+              Browse Templates →
             </Link>
           </div>
         </section>

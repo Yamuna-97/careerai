@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../utils/supabase';
 import { SlideTabs } from './ui/slide-tabs';
 import { Brain, Search, Bell, User, Settings, LogOut, ChevronDown, Menu } from 'lucide-react';
+import apiClient from '../api/client';
 
 export default function Header({ onToggleMobileSidebar }) {
   const navigate = useNavigate();
@@ -15,22 +16,17 @@ export default function Header({ onToggleMobileSidebar }) {
   useEffect(() => {
     async function loadUserProfile() {
       try {
-        const token = localStorage.getItem('token');
-        if (!token) return;
+        const [userRes, jobRes] = await Promise.allSettled([
+          apiClient.get('/users/me'),
+          apiClient.get('/jobs/profile')
+        ]);
 
-        const userRes = await fetch("http://localhost:8000/api/v1/users/me", {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
-        if (userRes.ok) {
-          const userData = await userRes.json();
-          setProfile(userData);
+        if (userRes.status === 'fulfilled') {
+          setProfile(userRes.value.data);
         }
 
-        const jobRes = await fetch("http://localhost:8000/api/v1/jobs/profile", {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
-        if (jobRes.ok) {
-          const jobData = await jobRes.json();
+        if (jobRes.status === 'fulfilled') {
+          const jobData = jobRes.value.data;
           if (jobData.profile_exists && jobData.profile?.current_title) {
             setRoleTitle(jobData.profile.current_title);
           } else if (jobData.extracted_draft?.current_title) {
@@ -102,11 +98,11 @@ export default function Header({ onToggleMobileSidebar }) {
           )}
 
           <Link to="/" className="flex items-center gap-2.5 group">
-            <div className="w-9 h-9 rounded-lg bg-primary text-on-primary flex items-center justify-center shadow-sm group-hover:scale-105 transition-all">
+            <div className="w-9 h-9 rounded-lg bg-gradient-to-r from-[#EC4899] to-[#FF8A3D] text-white flex items-center justify-center shadow-md group-hover:scale-105 transition-all">
               <Brain className="w-5 h-5 fill-current" />
             </div>
             <div className="hidden sm:block text-left">
-              <h1 className="font-headline-sm text-sm font-extrabold text-primary tracking-tight">CareerAI</h1>
+              <h1 className="font-headline-sm text-sm font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-[#EC4899] to-[#FF8A3D] tracking-tight">CareerAI</h1>
               <p className="text-[10px] text-on-surface-variant font-semibold">Smart Platform</p>
             </div>
           </Link>

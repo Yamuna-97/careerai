@@ -36,15 +36,15 @@ class Settings(BaseSettings):
     ALLOWED_ORIGINS: str = "http://localhost:5173"
 
     # ── AI Provider (optional) ────────────────────────────────────────
-    AI_PROVIDER: str = "none"   # "none" | "openai" | "gemini"
+    AI_PROVIDER: str = "gemini"   # "none" | "openai" | "gemini"
     OPENAI_API_KEY: str = ""
     GEMINI_API_KEY: str = ""
+    GEMINI_FAST_MODEL: str = "gemini-1.5-flash"
+    GEMINI_PRO_MODEL: str = "gemini-1.5-pro"
 
-    # ── Adzuna Job Search API ─────────────────────────────────────────
-    # Register free at https://developer.adzuna.com (250 requests/day free tier)
-    ADZUNA_APP_ID: str = ""
-    ADZUNA_APP_KEY: str = ""
-    ADZUNA_COUNTRY: str = "in"   # Default country code for Adzuna API searches
+    # ── JSearch Job Search API (openwebninja.com) ───────────────────────
+    # Key is ONLY used server-side — never exposed to frontend
+    JSEARCH_API_KEY: str = ""
 
     # ── Pydantic Settings ─────────────────────────────────────────────
     model_config = SettingsConfigDict(

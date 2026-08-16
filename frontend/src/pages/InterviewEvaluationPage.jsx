@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Header from '../components/Header';
+import apiClient from '../api/client';
 
 export default function InterviewEvaluationPage() {
   const navigate = useNavigate();
@@ -58,12 +59,8 @@ export default function InterviewEvaluationPage() {
 
     const fetchResults = async () => {
       try {
-        const token = localStorage.getItem('token');
-        const res = await fetch(`http://localhost:8000/api/v1/interviews/${sessionId}/results`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (!res.ok) throw new Error("Failed to load evaluation details.");
-        const data = await res.json();
+        const res = await apiClient.get(`/interviews/${sessionId}/results`);
+        const data = res.data;
         
         setSession(data.session);
         setQnaReview(data.qna_review || []);
@@ -84,17 +81,9 @@ export default function InterviewEvaluationPage() {
       return;
     }
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:8000/api/v1/interviews/${sessionId}/practice-again`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        navigate(`/interview-session?session_id=${data.session_id || data.id}`);
-      } else {
-        navigate('/interview-setup');
-      }
+      const res = await apiClient.post(`/interviews/${sessionId}/practice-again`);
+      const newSessionId = res.data?.session_id || res.data?.id || res.data?.session?.id;
+      navigate(`/interview-session?session_id=${newSessionId}`);
     } catch (e) {
       navigate('/interview-setup');
     }
@@ -122,7 +111,7 @@ export default function InterviewEvaluationPage() {
                   AI Assessment Scorecard & Action Plan
                 </p>
               </div>
-              <div className="flex gap-3">
+              <div className="flex gap-3 no-print">
                 <button
                   onClick={handlePracticeAgain}
                   className="px-4 py-2.5 rounded-lg font-label-md text-label-md bg-secondary text-white hover:opacity-90 transition-colors shadow-sm inline-flex items-center gap-2 cursor-pointer"

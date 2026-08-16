@@ -301,3 +301,78 @@ def delete_project(project_id: str, db: Session = Depends(get_db), current_user_
     db.delete(project)
     db.commit()
     return {"success": True}
+
+
+# 11. Templates: List Pre-installed Templates
+LATEX_TEMPLATES_METADATA = [
+    {"id": "1", "name": "AltaCV Template", "description": "Elegant two-column layout with sidebar icons."},
+    {"id": "2", "name": "CurVe CV Template", "description": "Customizable template with curriculum vitae style."},
+    {"id": "3", "name": "MBZUAI Resume Template", "description": "Professional clean layout from MBZUAI university."},
+    {"id": "4", "name": "Harshibar's Resume Template", "description": "Modern minimalist single-column developer layout."},
+    {"id": "5", "name": "SixtySecondsCV Template", "description": "Vibrant and dense modern multi-page layout."},
+    {"id": "6", "name": "IIIT Vadodara Resume", "description": "Structured single-column academic/placement style."},
+    {"id": "7", "name": "Intern Fair CV Template", "description": "Highly structured and clear layout for student placements."},
+    {"id": "8", "name": "CV Template Olico", "description": "Professional single-column clean timeline layout."},
+    {"id": "9", "name": "Two-Column One-Page CV", "description": "Highly compact two-column timeline design based on tccv."}
+]
+
+
+@router.get("/templates", summary="List pre-installed LaTeX templates")
+def list_latex_templates():
+    """Return list of available LaTeX templates."""
+    return LATEX_TEMPLATES_METADATA
+
+
+@router.get("/templates/{template_id}", summary="Get all files of a specific LaTeX template")
+def get_latex_template_files(template_id: str):
+    """Retrieve all files in a template directory, with main tex mapping to cv.tex."""
+    import os
+    import base64
+
+    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    templates_dir = os.path.join(base_dir, "templates", template_id)
+
+    if not os.path.exists(templates_dir) or not os.path.isdir(templates_dir):
+        raise HTTPException(status_code=404, detail="Template not found.")
+
+    MAIN_TEX_FILES = {
+        "1": "sample.tex",
+        "2": "cv-llt.tex",
+        "3": "MBZUAI Resume template.tex",
+        "4": "main.tex",
+        "5": "sixtysecondscv.tex",
+        "6": "main.tex",
+        "7": "main.tex",
+        "8": "CVmain.tex",
+        "9": "main.tex",
+    }
+
+    main_tex = MAIN_TEX_FILES.get(template_id)
+    files = {}
+
+    for root, _, filenames in os.walk(templates_dir):
+        for name in filenames:
+            file_path = os.path.join(root, name)
+            rel_path = os.path.relpath(file_path, templates_dir)
+            rel_path = rel_path.replace("\\", "/")
+
+            # Map the main TeX file of this template to cv.tex
+            mapped_name = "cv.tex" if rel_path == main_tex else rel_path
+
+            if name.lower().endswith((".png", ".jpg", ".jpeg", ".pdf")):
+                try:
+                    with open(file_path, "rb") as f:
+                        content = base64.b64encode(f.read()).decode("utf-8")
+                except Exception as e:
+                    raise HTTPException(status_code=500, detail=f"Failed to read asset {name}: {str(e)}")
+            else:
+                try:
+                    with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                        content = f.read()
+                except Exception as e:
+                    raise HTTPException(status_code=500, detail=f"Failed to read file {name}: {str(e)}")
+
+            files[mapped_name] = content
+
+    return {"success": True, "files": files}
+

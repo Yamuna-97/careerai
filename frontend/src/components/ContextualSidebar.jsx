@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard,
@@ -25,10 +25,10 @@ export const SIDEBAR_SECTIONS = {
   resume: {
     label: 'RESUME',
     shortLabel: 'RES',
-    headerGradient: 'from-primary to-secondary',
-    accentColor: 'text-primary',
-    accentBg: 'bg-primary/10',
-    activeBorder: 'border-primary',
+    headerGradient: 'from-[#EC4899] to-[#FF8A3D]',
+    accentColor: 'text-[#EC4899]',
+    accentBg: 'bg-[#EC4899]/10',
+    activeBorder: 'border-[#EC4899]',
     icon: FileText,
     items: [
       { name: 'Resume Hub',    path: '/resume',              icon: LayoutDashboard },
@@ -41,10 +41,10 @@ export const SIDEBAR_SECTIONS = {
   interview: {
     label: 'INTERVIEW',
     shortLabel: 'INT',
-    headerGradient: 'from-sky-500 to-blue-600',
-    accentColor: 'text-sky-600',
-    accentBg: 'bg-sky-500/10',
-    activeBorder: 'border-sky-500',
+    headerGradient: 'from-[#EC4899] to-[#FF8A3D]',
+    accentColor: 'text-[#EC4899]',
+    accentBg: 'bg-[#EC4899]/10',
+    activeBorder: 'border-[#EC4899]',
     icon: Mic,
     items: [
       { name: 'Prep Coach',        path: '/interview',            icon: MessageSquareText },
@@ -55,10 +55,10 @@ export const SIDEBAR_SECTIONS = {
   jobs: {
     label: 'JOB SEARCH',
     shortLabel: 'JOB',
-    headerGradient: 'from-emerald-500 to-teal-600',
-    accentColor: 'text-emerald-600',
-    accentBg: 'bg-emerald-500/10',
-    activeBorder: 'border-emerald-500',
+    headerGradient: 'from-[#EC4899] to-[#FF8A3D]',
+    accentColor: 'text-[#EC4899]',
+    accentBg: 'bg-[#EC4899]/10',
+    activeBorder: 'border-[#EC4899]',
     icon: Briefcase,
     items: [
       { name: 'Explore Jobs', path: '/jobs',           icon: BriefcaseBusiness },
@@ -77,10 +77,12 @@ export function getActiveSection(pathname) {
 
 export default function ContextualSidebar({ mobileOpen, onMobileClose }) {
   const location = useLocation();
+  const navigate = useNavigate();
   const sectionKey = getActiveSection(location.pathname);
   const config = sectionKey ? SIDEBAR_SECTIONS[sectionKey] : null;
 
   const [isHovered, setIsHovered] = useState(false);
+  const [savedResumes, setSavedResumes] = useState([]);
   const closeTimerRef = useRef(null);
 
   // Hover expansion logic with 200ms grace period to avoid flicker
@@ -102,6 +104,48 @@ export default function ContextualSidebar({ mobileOpen, onMobileClose }) {
   useEffect(() => {
     setIsHovered(false);
   }, [location.pathname]);
+
+  // Load saved resumes from localStorage
+  useEffect(() => {
+    const load = () => {
+      const raw = localStorage.getItem('careerai_saved_resumes');
+      setSavedResumes(raw ? JSON.parse(raw) : []);
+    };
+    load();
+    // Reload when storage changes (e.g. after saving)
+    window.addEventListener('storage', load);
+    // Also poll every 2s when sidebar is open (same-tab saves don't fire storage event)
+    const interval = setInterval(load, 2000);
+    return () => {
+      window.removeEventListener('storage', load);
+      clearInterval(interval);
+    };
+  }, []);
+
+  const handleLoadSaved = (entry) => {
+    // Store selected template and navigate to builder
+    localStorage.setItem('careerai_template_id', entry.template);
+    navigate('/resume/builder');
+  };
+
+  const handleDeleteSaved = (e, id) => {
+    e.stopPropagation();
+    const updated = savedResumes.filter(r => r.id !== id);
+    setSavedResumes(updated);
+    localStorage.setItem('careerai_saved_resumes', JSON.stringify(updated));
+  };
+
+  // Template accent colors map
+  const templateColors = {
+    Modern: '#EC4899', Classic: '#3B82F6', Executive: '#6366F1',
+    Creative: '#F59E0B', Minimal: '#10B981', Bold: '#EF4444',
+    Elegant: '#8B5CF6', Tech: '#06B6D4', Academic: '#84CC16', default: '#EC4899',
+  };
+
+  const formatDate = (iso) => {
+    const d = new Date(iso);
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  };
 
   if (!config) return null;
 
@@ -163,7 +207,7 @@ export default function ContextualSidebar({ mobileOpen, onMobileClose }) {
           </div>
 
           {/* Navigation Items List */}
-          <nav className="p-2 flex flex-col gap-1.5 flex-1 overflow-y-auto scrollbar-none">
+          <nav className="p-2 flex flex-col gap-1.5 overflow-y-auto scrollbar-none" style={{ flex: savedResumes.length && sectionKey === 'resume' && isHovered ? '0 0 auto' : '1' }}>
             {config.items.map((item) => {
               const Icon = item.icon;
               const active = isItemActive(item);
@@ -214,6 +258,55 @@ export default function ContextualSidebar({ mobileOpen, onMobileClose }) {
               );
             })}
           </nav>
+
+          {/* ── Saved Resumes Panel (resume section only, expanded) ─────────── */}
+          {sectionKey === 'resume' && isHovered && savedResumes.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mx-2 mb-2 rounded-xl border border-outline-variant/40 bg-surface-container-lowest overflow-hidden"
+            >
+              <div className="px-3 py-2 flex items-center justify-between border-b border-outline-variant/30 bg-[#EC4899]/5">
+                <span className="text-[10px] font-black uppercase tracking-widest text-[#EC4899]">Saved Resumes</span>
+                <span className="text-[9px] bg-[#EC4899] text-white rounded-full px-1.5 py-0.5 font-bold">{savedResumes.length}</span>
+              </div>
+              <div className="flex flex-col gap-0 max-h-52 overflow-y-auto scrollbar-none">
+                {savedResumes.map((entry) => {
+                  const color = templateColors[entry.template] || templateColors.default;
+                  const name = `${entry.data?.firstName || ''} ${entry.data?.lastName || ''}`.trim() || 'Resume';
+                  return (
+                    <div
+                      key={entry.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => handleLoadSaved(entry)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleLoadSaved(entry); }}
+                      className="group flex items-center gap-2.5 px-3 py-2.5 hover:bg-surface-container transition-colors text-left border-b border-outline-variant/20 last:border-0 cursor-pointer"
+                    >
+                      {/* Template color dot */}
+                      <div className="w-7 h-9 rounded-md shrink-0 flex items-center justify-center" style={{ background: `${color}18`, border: `1.5px solid ${color}40` }}>
+                        <div className="w-2 h-2 rounded-full" style={{ background: color }} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[11px] font-bold text-on-surface truncate">{name}</p>
+                        <p className="text-[9px] text-on-surface-variant truncate" style={{ color }}>{entry.template}</p>
+                        <p className="text-[9px] text-on-surface-variant/60">{formatDate(entry.savedAt)}</p>
+                      </div>
+                      {/* Delete button */}
+                      <button
+                        type="button"
+                        onClick={(e) => handleDeleteSaved(e, entry.id)}
+                        className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-50 transition-all"
+                        title="Remove"
+                      >
+                        <span className="material-symbols-outlined text-red-400" style={{ fontSize: 13 }}>delete</span>
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </motion.div>
+          )}
 
           {/* Bottom Hover Hint */}
           <div className="p-3 border-t border-outline-variant/30 text-center shrink-0">

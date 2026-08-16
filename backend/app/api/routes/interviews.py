@@ -1,16 +1,22 @@
 """
 app/api/routes/interviews.py
 ────────────────────────────
-FastAPI router endpoints for the Interview Preparation and Mock Interview module.
-Includes session management, answer evaluation, progress stats, and WebSocket voice session.
+FastAPI router for AI Mock Interview Module.
+
+Handles:
+- Text-based session setup & question progression.
+- Answer evaluation & mathematical weighted score persistence.
+- Anti-repetition question generation (using resume, JD, past QAs, and topics).
+- Final session reporting & personalized improvement plans.
 """
 
 import json
-from fastapi import APIRouter, Depends, HTTPException, status, WebSocket, WebSocketDisconnect
-from sqlalchemy.orm import Session
+import logging
 from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
 
-from app.core.database import get_db, SessionLocal
+from app.core.database import get_db
 from app.core.security import get_current_user_id
 from app.models.interview import InterviewSession, InterviewQuestion, InterviewAnswer
 from app.models.resume import Resume
@@ -26,6 +32,8 @@ from app.schemas.interview import (
     HintResponse,
 )
 from app.services import interview_ai_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -43,31 +51,32 @@ def start_interview(
     current_user_id: str = Depends(get_current_user_id),
 ):
     """
-    Start a mock interview session.
-    Generates and returns the first adaptive question based on settings.
+    Start a text-based mock interview session.
+    Generates and returns the first question based on role, difficulty, resume, and JD.
     """
-    # Fetch user resume if resume-based is requested
     resume_context = ""
     if body.resume_based:
         resume = db.query(Resume).filter(Resume.user_id == current_user_id).order_by(Resume.updated_at.desc()).first()
         if resume:
-            resume_context = f"Title: {resume.title}\nSummary: {resume.summary}\n"
-            skills_list = ", ".join([s.name for s in resume.skills])
-            resume_context += f"Skills: {skills_list}\n"
-            edu_list = "; ".join([f"{e.degree} from {e.institution}" for e in resume.education])
-            resume_context += f"Education: {edu_list}\n"
-            exp_list = "; ".join([f"{ex.position} at {ex.company}" for ex in resume.experience])
-            resume_context += f"Experience: {exp_list}\n"
+            resume_context = f"Title: {resume.title or ''}\nSummary: {resume.summary or ''}\n"
+            if resume.skills:
+                skills_list = ", ".join([s.name for s in resume.skills if hasattr(s, 'name')])
+                resume_context += f"Skills: {skills_list}\n"
+            if resume.education:
+                edu_list = "; ".join([f"{e.degree} from {e.institution}" for e in resume.education if hasattr(e, 'institution')])
+                resume_context += f"Education: {edu_list}\n"
+            if resume.experience:
+                exp_list = "; ".join([f"{ex.position} at {ex.company}" for ex in resume.experience if hasattr(ex, 'company')])
+                resume_context += f"Experience: {exp_list}\n"
 
-    # Create session
     session = InterviewSession(
         user_id=current_user_id,
-        role=body.role,
-        difficulty=body.difficulty,
-        interview_type=body.interview_type,
-        format=body.format,
-        num_questions=body.num_questions,
-        duration=body.duration,
+        role=body.role or "Software Engineer",
+        difficulty=body.difficulty or "intermediate",
+        interview_type=body.interview_type or "Technical",
+        format="text",
+        num_questions=body.num_questions or 10,
+        duration=body.duration or 15,
         status="in_progress",
         job_company=body.job_company,
         job_title=body.job_title,
@@ -80,25 +89,22 @@ def start_interview(
     db.refresh(session)
 
     # Generate first question
-    first_question_text = interview_ai_service.generate_interview_question(
+    first_q_data = interview_ai_service.generate_interview_question(
         session=session,
         previous_qas=[],
         resume_context=resume_context,
-        job_context=body.job_description or ""
+        job_context=body.job_description or "",
+        asked_questions=[]
     )
 
     coding_meta = None
-    question_display_text = first_question_text
-    hint_text = None
-    better_ans = None
-    
-    if body.interview_type.lower() == "coding":
+    question_display_text = first_q_data.get("question_text", "")
+    hint_text = first_q_data.get("hint", "")
+    better_ans = first_q_data.get("better_answer", "")
+
+    if body.interview_type.lower() == "coding" and "test_cases" in first_q_data:
         try:
-            coding_data = json.loads(first_question_text)
-            question_display_text = coding_data.get("question_text", first_question_text)
-            coding_meta = json.dumps(coding_data.get("test_cases", []))
-            hint_text = coding_data.get("hint", "")
-            better_ans = coding_data.get("better_answer", "")
+            coding_meta = json.dumps(first_q_data.get("test_cases", []))
         except Exception:
             coding_meta = None
 
@@ -117,7 +123,71 @@ def start_interview(
     return first_question
 
 
-# ── 2. Get Interview Session ──────────────────────────────────────────────────
+# ── 2. Readiness Stats & History ──────────────────────────────────────────────
+@router.get(
+    "/stats/readiness",
+    response_model=InterviewReadinessResponse,
+    summary="Get overall interview readiness scores from completed sessions",
+)
+def get_readiness(
+    db: Session = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id),
+):
+    sessions = (
+        db.query(InterviewSession)
+        .filter(InterviewSession.user_id == current_user_id, InterviewSession.status == "completed")
+        .all()
+    )
+
+    if not sessions or not any(s.overall_score is not None for s in sessions):
+        return InterviewReadinessResponse(
+            readiness_score=0,
+            technical=0,
+            communication=0,
+            confidence=0,
+            problem_solving=0,
+            behavioral=0,
+            streak=0,
+            completed_count=0,
+            average_score=0,
+            best_score=0,
+        )
+
+    valid_sessions = [s for s in sessions if s.overall_score is not None]
+    avg_score = round(sum(s.overall_score for s in valid_sessions) / len(valid_sessions))
+    avg_tech = round(sum(s.technical_score or s.overall_score for s in valid_sessions) / len(valid_sessions))
+    avg_comm = round(sum(s.communication_score or s.overall_score for s in valid_sessions) / len(valid_sessions))
+    avg_conf = round(sum(s.confidence_score or s.overall_score for s in valid_sessions) / len(valid_sessions))
+    avg_prob = round(sum(s.problem_solving_score or s.overall_score for s in valid_sessions) / len(valid_sessions))
+    best_score = max(s.overall_score for s in valid_sessions)
+
+    return InterviewReadinessResponse(
+        readiness_score=avg_score,
+        technical=avg_tech,
+        communication=avg_comm,
+        confidence=avg_conf,
+        problem_solving=avg_prob,
+        behavioral=avg_comm,
+        streak=len(sessions),
+        completed_count=len(sessions),
+        average_score=avg_score,
+        best_score=best_score,
+    )
+
+
+@router.get(
+    "/readiness",
+    response_model=InterviewReadinessResponse,
+    summary="Get overall interview readiness scores alias",
+)
+def get_readiness_alias(
+    db: Session = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id),
+):
+    return get_readiness(db, current_user_id)
+
+
+# ── 3. Get Session Details ───────────────────────────────────────────────────
 @router.get(
     "/{session_id}",
     response_model=InterviewSessionDetailResponse,
@@ -136,11 +206,11 @@ def get_interview(
     return session
 
 
-# ── 3. Submit Answer ──────────────────────────────────────────────────────────
+# ── 4. Submit Answer & Real Evaluation ──────────────────────────────────────
 @router.post(
     "/{session_id}/answer",
     response_model=AnswerEvaluationResponse,
-    summary="Submit answer and get evaluation",
+    summary="Submit typed answer and receive real AI evaluation",
 )
 def submit_answer(
     session_id: str,
@@ -149,8 +219,8 @@ def submit_answer(
     current_user_id: str = Depends(get_current_user_id),
 ):
     """
-    Submits the answer for the current question in the session.
-    Evaluates the answer and generates the next adaptive question.
+    Evaluates candidate's actual typed response using Gemini & weighted scoring.
+    Does NOT auto-advance to next question; candidate reviews evaluation first.
     """
     session = db.query(InterviewSession).filter(InterviewSession.id == session_id).first()
     if not session:
@@ -158,7 +228,7 @@ def submit_answer(
     if session.user_id != current_user_id:
         raise HTTPException(status_code=403, detail="Access denied.")
 
-    # Find the current question (the last one generated)
+    # Find the current question (order index highest)
     current_q = (
         db.query(InterviewQuestion)
         .filter(InterviewQuestion.session_id == session_id)
@@ -167,14 +237,13 @@ def submit_answer(
     )
 
     if not current_q:
-        raise HTTPException(status_code=404, detail="No question found for this session.")
+        raise HTTPException(status_code=404, detail="No active question found for this session.")
 
-    # Check if this question was already answered
     existing_ans = db.query(InterviewAnswer).filter(InterviewAnswer.question_id == current_q.id).first()
     if existing_ans:
         raise HTTPException(status_code=400, detail="This question has already been answered.")
 
-    # Run code sandbox if coding interview
+    # Execute sandbox if coding interview
     sandbox_results = None
     if session.interview_type.lower() == "coding":
         sandbox_results = interview_ai_service.run_code_in_sandbox(
@@ -183,7 +252,7 @@ def submit_answer(
             test_cases_json=current_q.coding_metadata
         )
 
-    # Evaluate the answer using Gemini
+    # Real evaluation call (raises exception if AI unavailable — NO fabricated score!)
     evaluation = interview_ai_service.evaluate_answer(
         question_text=current_q.question_text,
         answer_text=body.answer_text,
@@ -192,17 +261,16 @@ def submit_answer(
         sandbox_results=sandbox_results
     )
 
-    # Save answer and evaluations
     answer = InterviewAnswer(
         question_id=current_q.id,
         answer_text=body.answer_text,
-        score=evaluation.get("score", 70),
-        technical_accuracy=evaluation.get("technical_accuracy", 70),
-        relevance=evaluation.get("relevance", 70),
-        clarity=evaluation.get("clarity", 70),
-        structure=evaluation.get("structure", 70),
-        communication=evaluation.get("communication", 70),
-        completeness=evaluation.get("completeness", 70),
+        score=evaluation.get("score", 0),
+        technical_accuracy=evaluation.get("technical_accuracy", 0),
+        relevance=evaluation.get("relevance", 0),
+        clarity=evaluation.get("clarity", 0),
+        structure=evaluation.get("structure", 0),
+        communication=evaluation.get("communication", 0),
+        completeness=evaluation.get("completeness", 0),
         star_situation=evaluation.get("star_situation", False),
         star_task=evaluation.get("star_task", False),
         star_action=evaluation.get("star_action", False),
@@ -213,73 +281,118 @@ def submit_answer(
     )
     db.add(answer)
 
-    # Save better answer example on the question model for review later
     if evaluation.get("better_answer"):
         current_q.better_answer = evaluation.get("better_answer")
+
     db.commit()
     db.refresh(answer)
 
-    # Check if session is completed
     is_completed = current_q.order_index >= session.num_questions
-    next_question = None
-
-    if not is_completed:
-        # Load previous Q&As for adaptive context
-        previous_questions = (
-            db.query(InterviewQuestion)
-            .filter(InterviewQuestion.session_id == session_id)
-            .order_by(InterviewQuestion.order_index)
-            .all()
-        )
-        previous_qas = []
-        for q in previous_questions:
-            ans = db.query(InterviewAnswer).filter(InterviewAnswer.question_id == q.id).first()
-            if ans:
-                previous_qas.append({"question": q.question_text, "answer": ans.answer_text})
-
-        # Generate next question
-        next_text = interview_ai_service.generate_interview_question(
-            session=session,
-            previous_qas=previous_qas,
-            job_context=session.job_description or ""
-        )
-
-        next_coding_meta = None
-        next_question_display_text = next_text
-        next_hint = None
-        next_better_ans = None
-
-        if session.interview_type.lower() == "coding":
-            try:
-                next_coding_data = json.loads(next_text)
-                next_question_display_text = next_coding_data.get("question_text", next_text)
-                next_coding_meta = json.dumps(next_coding_data.get("test_cases", []))
-                next_hint = next_coding_data.get("hint", "")
-                next_better_ans = next_coding_data.get("better_answer", "")
-            except Exception:
-                next_coding_meta = None
-
-        next_question = InterviewQuestion(
-            session_id=session.id,
-            question_text=next_question_display_text,
-            order_index=current_q.order_index + 1,
-            coding_metadata=next_coding_meta,
-            hint=next_hint,
-            better_answer=next_better_ans
-        )
-        db.add(next_question)
-        db.commit()
-        db.refresh(next_question)
 
     return AnswerEvaluationResponse(
         answer=answer,
-        next_question=next_question,
+        next_question=None,
         better_answer=current_q.better_answer,
         is_completed=is_completed,
     )
 
 
-# ── 4. Get Hint ───────────────────────────────────────────────────────────────
+# ── 5. Generate Next Question ────────────────────────────────────────────────
+@router.post(
+    "/{session_id}/next-question",
+    summary="Generate the next non-repetitive adaptive question",
+)
+def generate_next_question(
+    session_id: str,
+    db: Session = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id),
+):
+    session = db.query(InterviewSession).filter(InterviewSession.id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found.")
+    if session.user_id != current_user_id:
+        raise HTTPException(status_code=403, detail="Access denied.")
+
+    questions = db.query(InterviewQuestion).filter(InterviewQuestion.session_id == session_id).order_by(InterviewQuestion.order_index).all()
+    answered_qs = [q for q in questions if q.answer is not None]
+
+    if len(answered_qs) >= session.num_questions:
+        # Complete session and calculate mathematical averages
+        session.status = "completed"
+        scores = [q.answer.score for q in answered_qs]
+        session.overall_score = round(sum(scores) / len(scores))
+        session.technical_score = round(sum(q.answer.technical_accuracy for q in answered_qs) / len(answered_qs))
+        session.communication_score = round(sum(q.answer.communication for q in answered_qs) / len(answered_qs))
+        session.relevance_score = round(sum(q.answer.relevance for q in answered_qs) / len(answered_qs))
+        session.confidence_score = round(sum(q.answer.clarity for q in answered_qs) / len(answered_qs))
+        session.problem_solving_score = round(sum(q.answer.structure for q in answered_qs) / len(answered_qs))
+
+        qas = [{"question": q.question_text, "answer": q.answer.answer_text, "score": q.answer.score} for q in answered_qs]
+        summary = interview_ai_service.generate_interview_summary(session, qas)
+
+        session.strengths = summary.get("overall_strengths", "")
+        session.weaknesses = summary.get("overall_weaknesses", "")
+        session.improvement_plan = summary.get("improvement_plan", "")
+        db.commit()
+
+        return {"completed": True, "session_id": session_id}
+
+    # Extract resume context
+    resume_context = ""
+    resume = db.query(Resume).filter(Resume.user_id == current_user_id).order_by(Resume.updated_at.desc()).first()
+    if resume:
+        skills_str = ", ".join([s.name for s in resume.skills]) if resume.skills else ""
+        resume_context = f"Summary: {resume.summary or ''}\nSkills: {skills_str}"
+
+    # Previous QAs and Asked Questions
+    previous_qas = [{"question": q.question_text, "answer": q.answer.answer_text, "score": q.answer.score} for q in answered_qs]
+    asked_questions = [q.question_text for q in questions]
+
+    next_q_data = interview_ai_service.generate_interview_question(
+        session=session,
+        previous_qas=previous_qas,
+        resume_context=resume_context,
+        job_context=session.job_description or "",
+        asked_questions=asked_questions
+    )
+
+    coding_meta = None
+    question_display_text = next_q_data.get("question_text", "")
+    hint_text = next_q_data.get("hint", "")
+    better_ans = next_q_data.get("better_answer", "")
+
+    if session.interview_type.lower() == "coding" and "test_cases" in next_q_data:
+        try:
+            coding_meta = json.dumps(next_q_data.get("test_cases", []))
+        except Exception:
+            coding_meta = None
+
+    next_question = InterviewQuestion(
+        session_id=session.id,
+        question_text=question_display_text,
+        order_index=len(questions) + 1,
+        coding_metadata=coding_meta,
+        hint=hint_text,
+        better_answer=better_ans
+    )
+    db.add(next_question)
+    db.commit()
+    db.refresh(next_question)
+
+    return {
+        "completed": False,
+        "question": {
+            "id": next_question.id,
+            "session_id": session.id,
+            "question_text": next_question.question_text,
+            "order_index": next_question.order_index,
+            "hint": next_question.hint,
+            "coding_metadata": next_question.coding_metadata
+        }
+    }
+
+
+# ── 6. Get Hint ───────────────────────────────────────────────────────────────
 @router.post(
     "/{session_id}/hint",
     response_model=HintResponse,
@@ -304,12 +417,11 @@ def get_hint(
     )
 
     if not current_q:
-        raise HTTPException(status_code=404, detail="No question found.")
+        raise HTTPException(status_code=404, detail="No active question found.")
 
     if current_q.hint:
         return HintResponse(hint=current_q.hint)
 
-    # Generate hint using AI
     hint_text = interview_ai_service.generate_hint(current_q.question_text)
     current_q.hint = hint_text
     db.commit()
@@ -317,11 +429,11 @@ def get_hint(
     return HintResponse(hint=hint_text)
 
 
-# ── 5. Complete Interview & Summarize ─────────────────────────────────────────
+# ── 7. Complete Session Manually ──────────────────────────────────────────────
 @router.post(
     "/{session_id}/complete",
     response_model=InterviewSessionDetailResponse,
-    summary="Complete interview session and generate roadmap summary",
+    summary="Complete interview session and generate summary",
 )
 def complete_interview(
     session_id: str,
@@ -334,7 +446,6 @@ def complete_interview(
     if session.user_id != current_user_id:
         raise HTTPException(status_code=403, detail="Access denied.")
 
-    # Calculate overall scores
     questions = session.questions
     answered_qs = [q for q in questions if q.answer is not None]
 
@@ -344,24 +455,17 @@ def complete_interview(
         db.commit()
         return session
 
-    # Averages
-    overall = round(sum(q.answer.score for q in answered_qs) / len(answered_qs))
-    tech = round(sum(q.answer.technical_accuracy for q in answered_qs) / len(answered_qs))
-    comm = round(sum(q.answer.communication for q in answered_qs) / len(answered_qs))
-    relevance = round(sum(q.answer.relevance for q in answered_qs) / len(answered_qs))
-    structure = round(sum(q.answer.structure for q in answered_qs) / len(answered_qs))
-    clarity = round(sum(q.answer.clarity for q in answered_qs) / len(answered_qs))
+    scores = [q.answer.score for q in answered_qs]
+    session.overall_score = round(sum(scores) / len(scores))
+    session.technical_score = round(sum(q.answer.technical_accuracy for q in answered_qs) / len(answered_qs))
+    session.communication_score = round(sum(q.answer.communication for q in answered_qs) / len(answered_qs))
+    session.relevance_score = round(sum(q.answer.relevance for q in answered_qs) / len(answered_qs))
+    session.confidence_score = round(sum(q.answer.clarity for q in answered_qs) / len(answered_qs))
+    session.problem_solving_score = round(sum(q.answer.structure for q in answered_qs) / len(answered_qs))
 
-    # AI overall summary roadmap
     qas = [{"question": q.question_text, "answer": q.answer.answer_text, "score": q.answer.score} for q in answered_qs]
     summary = interview_ai_service.generate_interview_summary(session, qas)
 
-    session.overall_score = overall
-    session.technical_score = tech
-    session.communication_score = comm
-    session.relevance_score = relevance
-    session.confidence_score = clarity  # Proxy
-    session.problem_solving_score = structure  # Proxy
     session.strengths = summary.get("overall_strengths", "")
     session.weaknesses = summary.get("overall_weaknesses", "")
     session.improvement_plan = summary.get("improvement_plan", "")
@@ -372,7 +476,7 @@ def complete_interview(
     return session
 
 
-# ── 6. Get Results ────────────────────────────────────────────────────────────
+# ── 8. Get Results ────────────────────────────────────────────────────────────
 @router.get(
     "/{session_id}/results",
     response_model=InterviewResultsResponse,
@@ -413,41 +517,11 @@ def get_results(
     return InterviewResultsResponse(
         session=session,
         qna_review=qna_review,
-        improvement_plan=session.improvement_plan,
+        improvement_plan=session.improvement_plan or "",
     )
 
 
-# ── 7. Get History (with and without prefix) ───────────────────────────
-@router.get(
-    "/history/all",
-    response_model=List[InterviewSessionSummaryResponse],
-    summary="Get all completed interview history",
-)
-def get_history(
-    db: Session = Depends(get_db),
-    current_user_id: str = Depends(get_current_user_id),
-):
-    return (
-        db.query(InterviewSession)
-        .filter(InterviewSession.user_id == current_user_id, InterviewSession.status == "completed")
-        .order_by(InterviewSession.updated_at.desc())
-        .all()
-    )
-
-
-@router.get(
-    "/history",
-    response_model=List[InterviewSessionSummaryResponse],
-    summary="Get all completed interview history alias",
-)
-def get_history_alias(
-    db: Session = Depends(get_db),
-    current_user_id: str = Depends(get_current_user_id),
-):
-    return get_history(db, current_user_id)
-
-
-# ── 8. Delete Interview Session ───────────────────────────────────────────────
+# ── 9. Delete Session ─────────────────────────────────────────────────────────
 @router.delete(
     "/{session_id}",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -465,303 +539,3 @@ def delete_interview(
         raise HTTPException(status_code=403, detail="Access denied.")
     db.delete(session)
     db.commit()
-
-
-# ── 9. Practice Again ─────────────────────────────────────────────────────────
-@router.post(
-    "/{session_id}/practice-again",
-    response_model=InterviewQuestionResponse,
-    status_code=status.HTTP_201_CREATED,
-    summary="Start new session from previous configuration",
-)
-def practice_again(
-    session_id: str,
-    db: Session = Depends(get_db),
-    current_user_id: str = Depends(get_current_user_id),
-):
-    old_session = db.query(InterviewSession).filter(InterviewSession.id == session_id).first()
-    if not old_session:
-        raise HTTPException(status_code=404, detail="Original session not found.")
-    
-    session = InterviewSession(
-        user_id=current_user_id,
-        role=old_session.role,
-        difficulty=old_session.difficulty,
-        interview_type=old_session.interview_type,
-        format=old_session.format,
-        num_questions=old_session.num_questions,
-        duration=old_session.duration,
-        status="in_progress",
-        job_company=old_session.job_company,
-        job_title=old_session.job_title,
-        job_description=old_session.job_description,
-        language=old_session.language,
-        topic=old_session.topic
-    )
-    db.add(session)
-    db.commit()
-    db.refresh(session)
-
-    # Generate first question
-    first_text = interview_ai_service.generate_interview_question(session=session, previous_qas=[])
-    
-    coding_meta = None
-    question_display_text = first_text
-    hint_text = None
-    better_ans = None
-
-    if old_session.interview_type.lower() == "coding":
-        try:
-            coding_data = json.loads(first_text)
-            question_display_text = coding_data.get("question_text", first_text)
-            coding_meta = json.dumps(coding_data.get("test_cases", []))
-            hint_text = coding_data.get("hint", "")
-            better_ans = coding_data.get("better_answer", "")
-        except Exception:
-            coding_meta = None
-
-    first_q = InterviewQuestion(
-        session_id=session.id,
-        question_text=question_display_text,
-        order_index=1,
-        coding_metadata=coding_meta,
-        hint=hint_text,
-        better_answer=better_ans
-    )
-    db.add(first_q)
-    db.commit()
-    db.refresh(first_q)
-
-    return first_q
-
-
-# ── 10. Get Overall Readiness ────────────────────────────────────────────────
-@router.get(
-    "/stats/readiness",
-    response_model=InterviewReadinessResponse,
-    summary="Get overall interview readiness scores",
-)
-def get_readiness(
-    db: Session = Depends(get_db),
-    current_user_id: str = Depends(get_current_user_id),
-):
-    sessions = (
-        db.query(InterviewSession)
-        .filter(InterviewSession.user_id == current_user_id, InterviewSession.status == "completed")
-        .all()
-    )
-
-    if not sessions:
-        return InterviewReadinessResponse(
-            readiness_score=72,
-            technical=78,
-            communication=68,
-            confidence=71,
-            problem_solving=76,
-            behavioral=72,
-            streak=0,
-            completed_count=0,
-            average_score=0,
-            best_score=0,
-        )
-
-    avg_score = round(sum(s.overall_score for s in sessions if s.overall_score is not None) / len(sessions))
-    avg_tech = round(sum(s.technical_score for s in sessions if s.technical_score is not None) / len(sessions))
-    avg_comm = round(sum(s.communication_score for s in sessions if s.communication_score is not None) / len(sessions))
-    avg_conf = round(sum(s.confidence_score for s in sessions if s.confidence_score is not None) / len(sessions))
-    avg_prob = round(sum(s.problem_solving_score for s in sessions if s.problem_solving_score is not None) / len(sessions))
-    best_score = max(s.overall_score for s in sessions if s.overall_score is not None)
-
-    return InterviewReadinessResponse(
-        readiness_score=avg_score,
-        technical=avg_tech,
-        communication=avg_comm,
-        confidence=avg_conf,
-        problem_solving=avg_prob,
-        behavioral=avg_comm,
-        streak=len(sessions),
-        completed_count=len(sessions),
-        average_score=avg_score,
-        best_score=best_score,
-    )
-
-
-@router.get(
-    "/readiness",
-    response_model=InterviewReadinessResponse,
-    summary="Get overall interview readiness scores alias",
-)
-def get_readiness_alias(
-    db: Session = Depends(get_db),
-    current_user_id: str = Depends(get_current_user_id),
-):
-    return get_readiness(db, current_user_id)
-
-
-# ── 11. WebSocket: Voice Interview Gateway ────────────────────────────────────
-@router.websocket("/{session_id}/voice")
-async def websocket_voice_endpoint(websocket: WebSocket, session_id: str):
-    """
-    WebSocket endpoint for real-time voice interviews.
-    Conducts the complete live audio mock session.
-    """
-    await websocket.accept()
-    db = SessionLocal()
-    try:
-        # Initial connect acknowledgment
-        await websocket.send_json({
-            "event": "connected",
-            "message": "Connected to CareerAI voice coach.",
-            "session_id": session_id
-        })
-
-        session = db.query(InterviewSession).filter(InterviewSession.id == session_id).first()
-        if not session:
-            await websocket.send_json({"event": "error", "message": "Session not found."})
-            return
-
-        while True:
-            data = await websocket.receive_text()
-            payload = json.loads(data)
-            event_type = payload.get("event")
-
-            if event_type == "start":
-                # Find or generate first question
-                first_q = db.query(InterviewQuestion).filter(InterviewQuestion.session_id == session_id, InterviewQuestion.order_index == 1).first()
-                if not first_q:
-                    # Generate first question
-                    first_text = interview_ai_service.generate_interview_question(session, [])
-                    first_q = InterviewQuestion(session_id=session_id, question_text=first_text, order_index=1)
-                    db.add(first_q)
-                    db.commit()
-                    db.refresh(first_q)
-                
-                await websocket.send_json({
-                    "event": "speech",
-                    "text": first_q.question_text,
-                    "order_index": 1,
-                    "total_questions": session.num_questions
-                })
-
-            elif event_type == "speech_input":
-                user_answer_text = payload.get("text", "")
-                if not user_answer_text.strip():
-                    continue
-
-                # Find the current question
-                current_q = (
-                    db.query(InterviewQuestion)
-                    .filter(InterviewQuestion.session_id == session_id)
-                    .order_by(InterviewQuestion.order_index.desc())
-                    .first()
-                )
-
-                if not current_q:
-                    continue
-
-                # Check if already answered
-                existing_ans = db.query(InterviewAnswer).filter(InterviewAnswer.question_id == current_q.id).first()
-                if existing_ans:
-                    continue
-
-                # Evaluate answer
-                evaluation = interview_ai_service.evaluate_answer(
-                    question_text=current_q.question_text,
-                    answer_text=user_answer_text,
-                    difficulty=session.difficulty,
-                    interview_type=session.interview_type
-                )
-
-                answer = InterviewAnswer(
-                    question_id=current_q.id,
-                    answer_text=user_answer_text,
-                    score=evaluation.get("score", 70),
-                    technical_accuracy=evaluation.get("technical_accuracy", 70),
-                    relevance=evaluation.get("relevance", 70),
-                    clarity=evaluation.get("clarity", 70),
-                    structure=evaluation.get("structure", 70),
-                    communication=evaluation.get("communication", 70),
-                    completeness=evaluation.get("completeness", 70),
-                    star_situation=evaluation.get("star_situation", False),
-                    star_task=evaluation.get("star_task", False),
-                    star_action=evaluation.get("star_action", False),
-                    star_result=evaluation.get("star_result", False),
-                    strengths_feedback=evaluation.get("strengths_feedback", ""),
-                    weaknesses_feedback=evaluation.get("weaknesses_feedback", ""),
-                    suggestions_feedback=evaluation.get("suggestions_feedback", ""),
-                )
-                db.add(answer)
-                current_q.better_answer = evaluation.get("better_answer", "")
-                db.commit()
-
-                # Check if session is completed
-                is_completed = current_q.order_index >= session.num_questions
-                if is_completed:
-                    # Trigger summary and complete
-                    answered_qs = db.query(InterviewQuestion).filter(InterviewQuestion.session_id == session_id).all()
-                    answered_qs = [q for q in answered_qs if q.answer is not None]
-                    
-                    overall = round(sum(q.answer.score for q in answered_qs) / len(answered_qs))
-                    tech = round(sum(q.answer.technical_accuracy for q in answered_qs) / len(answered_qs))
-                    comm = round(sum(q.answer.communication for q in answered_qs) / len(answered_qs))
-                    relevance = round(sum(q.answer.relevance for q in answered_qs) / len(answered_qs))
-                    structure = round(sum(q.answer.structure for q in answered_qs) / len(answered_qs))
-                    clarity = round(sum(q.answer.clarity for q in answered_qs) / len(answered_qs))
-                    
-                    qas = [{"question": q.question_text, "answer": q.answer.answer_text, "score": q.answer.score} for q in answered_qs]
-                    summary = interview_ai_service.generate_interview_summary(session, qas)
-
-                    session.overall_score = overall
-                    session.technical_score = tech
-                    session.communication_score = comm
-                    session.relevance_score = relevance
-                    session.confidence_score = clarity
-                    session.problem_solving_score = structure
-                    session.strengths = summary.get("overall_strengths", "")
-                    session.weaknesses = summary.get("overall_weaknesses", "")
-                    session.improvement_plan = summary.get("improvement_plan", "")
-                    session.status = "completed"
-                    db.commit()
-
-                    await websocket.send_json({
-                        "event": "completed",
-                        "message": "Session completed!",
-                        "overall_score": overall
-                    })
-                else:
-                    # Generate next question
-                    previous_questions = (
-                        db.query(InterviewQuestion)
-                        .filter(InterviewQuestion.session_id == session_id)
-                        .order_by(InterviewQuestion.order_index)
-                        .all()
-                    )
-                    previous_qas = [{"question": q.question_text, "answer": q.answer.answer_text} for q in previous_questions if q.answer]
-                    
-                    next_text = interview_ai_service.generate_interview_question(session, previous_qas)
-                    next_q = InterviewQuestion(
-                        session_id=session_id,
-                        question_text=next_text,
-                        order_index=current_q.order_index + 1
-                    )
-                    db.add(next_q)
-                    db.commit()
-
-                    await websocket.send_json({
-                        "event": "speech",
-                        "text": next_text,
-                        "order_index": current_q.order_index + 1,
-                        "total_questions": session.num_questions
-                    })
-
-            elif event_type == "mute":
-                await websocket.send_json({"event": "status", "message": "Microphone muted"})
-            elif event_type == "pause":
-                await websocket.send_json({"event": "status", "message": "Interview paused"})
-
-    except WebSocketDisconnect:
-        print(f"WebSocket disconnected for session: {session_id}")
-    except Exception as e:
-        print(f"WebSocket error: {e}")
-    finally:
-        db.close()

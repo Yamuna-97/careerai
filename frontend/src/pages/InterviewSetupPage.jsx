@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
+import apiClient from '../api/client';
 
 export default function InterviewSetupPage() {
   const navigate = useNavigate();
@@ -51,46 +52,35 @@ export default function InterviewSetupPage() {
     'Custom Role'
   ];
 
+  const [errorMsg, setErrorMsg] = useState('');
+
   const handleStart = async () => {
     setSubmitting(true);
+    setErrorMsg('');
     try {
-      const token = localStorage.getItem('token');
       const finalRole = role === 'Custom Role' ? customRole : role;
       
       const payload = {
         role: finalRole || 'Software Engineer',
         difficulty,
         interview_type: interviewType,
-        format,
+        format: 'text',
         num_questions: parseInt(numQuestions),
         duration: parseInt(duration),
         resume_based: resumeBased,
         job_company: useJobDescription ? jobCompany : null,
         job_title: useJobDescription ? jobTitle : null,
         job_description: useJobDescription ? jobDescription : null,
-        language: interviewType.lower() === 'coding' ? language : null,
-        topic: interviewType.lower() === 'coding' ? topic : null
+        language: interviewType.toLowerCase() === 'coding' ? language : null,
+        topic: interviewType.toLowerCase() === 'coding' ? topic : null
       };
 
-      const res = await fetch('http://localhost:8000/api/v1/interviews/start', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(payload)
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        navigate(`/interview-session?session_id=${data.session_id || data.id}`);
-      } else {
-        // Fallback to static session
-        navigate('/interview-session?demo=true');
-      }
+      const res = await apiClient.post('/interviews/start', payload);
+      const targetSessionId = res.data.session_id || res.data.id || res.data.session?.id;
+      navigate(`/interview-session?session_id=${targetSessionId}`);
     } catch (e) {
-      console.error("API start failed, fallback to demo mode.", e);
-      navigate('/interview-session?demo=true');
+      console.error(e);
+      setErrorMsg(e.response?.data?.detail || e.message || 'Failed to start interview. Please try again.');
     } finally {
       setSubmitting(false);
     }

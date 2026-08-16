@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
+import apiClient from '../api/client';
 import Header from '../components/Header';
 
 export default function InterviewLandingPage() {
@@ -7,81 +8,67 @@ export default function InterviewLandingPage() {
   const [loading, setLoading] = useState(true);
   const [activeGuideTab, setActiveGuideTab] = useState('before'); // before, during, after
   
-  // Readiness Stats
+  // Stats / readiness score state
   const [readiness, setReadiness] = useState({
     readiness_score: 72,
     technical: 78,
     communication: 68,
     confidence: 71,
     problem_solving: 76,
-    behavioral: 72,
-    streak: 3,
     completed_count: 5,
     average_score: 74,
     best_score: 84,
+    streak: 3
   });
 
-  // History List
+  // Recent practice history state
   const [history, setHistory] = useState([
     {
-      id: 'session_1',
-      role: 'Python Developer',
-      interview_type: 'Technical',
-      difficulty: 'intermediate',
-      overall_score: 84,
+      id: 'mock-session-1',
+      role: 'Full Stack Engineer',
+      type: 'Technical Interview',
+      score: 82,
+      date: 'Yesterday',
       duration: 20,
-      created_at: '2026-08-12T14:32:00Z',
+      created_at: '2026-08-14T10:00:00Z',
     },
     {
-      id: 'session_2',
-      role: 'Full Stack Developer',
-      interview_type: 'Mixed Interview',
-      difficulty: 'pro',
-      overall_score: 68,
-      duration: 30,
-      created_at: '2026-08-10T10:15:00Z',
+      id: 'mock-session-2',
+      role: 'Frontend Engineer',
+      type: 'System Design',
+      score: 75,
+      date: '3 days ago',
+      duration: 25,
+      created_at: '2026-08-12T14:30:00Z',
     },
     {
-      id: 'session_3',
-      role: 'Frontend Developer',
-      interview_type: 'HR / Behavioral',
-      difficulty: 'beginner',
-      overall_score: 72,
+      id: 'mock-session-3',
+      role: 'Software Developer',
+      type: 'Behavioral',
+      score: 88,
+      date: '1 week ago',
       duration: 15,
       created_at: '2026-08-08T09:00:00Z',
     }
   ]);
 
   useEffect(() => {
-    // Fetch real data from FastAPI backend
+    // Fetch real data from FastAPI backend via apiClient
     const fetchData = async () => {
       try {
-        const token = localStorage.getItem('token');
-        
-        // Fetch Stats
-        const statsRes = await fetch('http://localhost:8000/api/v1/interviews/readiness', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (statsRes.ok) {
-          const statsData = await statsRes.json();
-          // Update only if we have actual completed interviews
-          if (statsData.completed_count > 0) {
-            setReadiness(statsData);
-          }
-        }
+        const [statsRes, historyRes] = await Promise.allSettled([
+          apiClient.get('/interviews/readiness'),
+          apiClient.get('/interviews/history')
+        ]);
 
-        // Fetch History
-        const historyRes = await fetch('http://localhost:8000/api/v1/interviews/history', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (historyRes.ok) {
-          const historyData = await historyRes.json();
-          if (historyData && historyData.length > 0) {
-            setHistory(historyData);
-          }
+        if (statsRes.status === 'fulfilled' && statsRes.value.data?.completed_count > 0) {
+          setReadiness(statsRes.value.data);
+        }
+        if (historyRes.status === 'fulfilled' && historyRes.value.data?.length > 0) {
+          setHistory(historyRes.value.data);
         }
       } catch (err) {
-        console.error("Failed to connect to backend api, using high-fidelity mock data.", err);
+        console.error("Failed to connect to backend api:", err);
       } finally {
         setLoading(false);
       }
@@ -92,7 +79,6 @@ export default function InterviewLandingPage() {
 
   const handleStartBeginnerPractice = async () => {
     try {
-      const token = localStorage.getItem('token');
       const payload = {
         role: 'Software Engineer',
         difficulty: 'beginner',
@@ -103,25 +89,11 @@ export default function InterviewLandingPage() {
         resume_based: false
       };
       
-      const res = await fetch('http://localhost:8000/api/v1/interviews/start', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(payload)
-      });
-      
-      if (res.ok) {
-        const data = await res.json();
-        navigate(`/interview-session?session_id=${data.session_id || data.session.id}`);
-      } else {
-        // Fallback for static demo
-        navigate('/interview-session?demo=true');
-      }
+      const res = await apiClient.post('/interviews/start', payload);
+      navigate(`/interview-session?sessionId=${res.data.session_id}`);
     } catch (e) {
       console.error(e);
-      navigate('/interview-session?demo=true');
+      navigate('/interview-setup');
     }
   };
 
@@ -169,7 +141,7 @@ export default function InterviewLandingPage() {
 
           
           {/* HERO SECTION */}
-          <section className="relative bg-gradient-to-r from-secondary-container to-primary-container text-on-primary rounded-2xl p-8 md:p-12 overflow-hidden shadow-lg flex flex-col md:flex-row items-center gap-8">
+          <section className="relative bg-gradient-to-r from-[#EC4899] to-[#FF8A3D] text-on-primary rounded-2xl p-8 md:p-12 overflow-hidden shadow-lg flex flex-col md:flex-row items-center gap-8">
             <div className="absolute right-0 top-0 w-64 h-64 bg-white/5 rounded-bl-full pointer-events-none"></div>
             <div className="flex-1 z-10 text-center md:text-left">
               <h2 className="font-display-lg text-3xl md:text-5xl font-extrabold tracking-tight mb-4">
@@ -181,7 +153,7 @@ export default function InterviewLandingPage() {
               <div className="flex flex-wrap gap-4 justify-center md:justify-start">
                 <button
                   onClick={() => navigate('/interview-setup')}
-                  className="bg-white text-secondary px-8 py-3.5 rounded-lg font-label-md text-label-md font-bold shadow-md hover:bg-surface-container-low transition-all hover:scale-[1.02] cursor-pointer"
+                  className="bg-white text-[#EC4899] px-8 py-3.5 rounded-lg font-label-md text-label-md font-bold shadow-md hover:bg-slate-50 transition-all hover:scale-[1.02] cursor-pointer"
                 >
                   Start Practice Interview
                 </button>
@@ -210,7 +182,7 @@ export default function InterviewLandingPage() {
               <div className="relative w-44 h-44 flex-shrink-0 flex items-center justify-center">
                 <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
                   <circle className="text-surface-container-high stroke-current" cx="50" cy="50" fill="transparent" r="40" strokeWidth="8"></circle>
-                  <circle className="text-secondary stroke-current" cx="50" cy="50" fill="transparent" r="40" strokeDasharray="251.2" strokeDashoffset={251.2 - (251.2 * readiness.readiness_score) / 100} strokeLinecap="round" strokeWidth="9"></circle>
+                  <circle className="text-[#EC4899] stroke-current" cx="50" cy="50" fill="transparent" r="40" strokeDasharray="251.2" strokeDashoffset={251.2 - (251.2 * readiness.readiness_score) / 100} strokeLinecap="round" strokeWidth="9"></circle>
                 </svg>
                 <div className="absolute flex flex-col items-center justify-center">
                   <span className="font-display-lg text-4xl font-extrabold text-on-surface">
@@ -229,10 +201,10 @@ export default function InterviewLandingPage() {
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
                   {[
-                    { label: 'Technical Accuracy', score: readiness.technical, color: 'bg-primary' },
-                    { label: 'Communication Style', score: readiness.communication, color: 'bg-secondary' },
-                    { label: 'Confidence & Delivery', score: readiness.confidence, color: 'bg-tertiary-container' },
-                    { label: 'Problem Solving', score: readiness.problem_solving, color: 'bg-secondary-container' },
+                    { label: 'Technical Accuracy', score: readiness.technical, color: 'bg-gradient-to-r from-[#EC4899] to-[#FF8A3D]' },
+                    { label: 'Communication Style', score: readiness.communication, color: 'bg-gradient-to-r from-[#EC4899] to-[#FF8A3D]' },
+                    { label: 'Confidence & Delivery', score: readiness.confidence, color: 'bg-gradient-to-r from-[#EC4899] to-[#FF8A3D]' },
+                    { label: 'Problem Solving', score: readiness.problem_solving, color: 'bg-gradient-to-r from-[#EC4899] to-[#FF8A3D]' },
                   ].map((dim, idx) => (
                     <div key={idx} className="space-y-1">
                       <div className="flex justify-between text-xs font-semibold">
@@ -496,73 +468,63 @@ export default function InterviewLandingPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {history.map((item, idx) => (
-                      <tr
-                        key={item.id + idx}
-                        className="border-b border-outline-variant/20 hover:bg-surface-container-lowest/50 transition-colors"
-                      >
-                        <td className="py-4 px-6">
-                          <p className="font-label-md text-label-md text-on-surface font-semibold">{item.role}</p>
-                          {item.topic && (
-                            <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-bold uppercase mt-1 inline-block">
-                              {item.topic}
+                    {history.map((item, idx) => {
+                      const diff = (item.difficulty || 'beginner').toLowerCase();
+                      const score = item.overall_score ?? item.score ?? 75;
+                      return (
+                        <tr
+                          key={item.id || idx}
+                          className="border-b border-outline-variant/20 hover:bg-surface-container-lowest/50 transition-colors"
+                        >
+                          <td className="py-4 px-6">
+                            <p className="font-label-md text-label-md text-on-surface font-semibold">{item.role || 'Software Engineer'}</p>
+                            {item.topic && (
+                              <span className="text-[10px] bg-[#EC4899]/10 text-[#EC4899] px-1.5 py-0.5 rounded font-bold uppercase mt-1 inline-block">
+                                {item.topic}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-4 px-6 font-body-sm text-sm text-on-surface-variant">
+                            {item.interview_type || item.type || 'Technical'}
+                          </td>
+                          <td className="py-4 px-6">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                              diff === 'pro'
+                                ? 'bg-error-container text-on-error-container border border-error/20'
+                                : diff === 'intermediate'
+                                ? 'bg-[#EC4899]/20 text-[#EC4899]'
+                                : 'bg-emerald-500/10 text-emerald-600 font-bold'
+                            }`}>
+                              {item.difficulty || 'Beginner'}
                             </span>
-                          )}
-                        </td>
-                        <td className="py-4 px-6 font-body-sm text-sm text-on-surface-variant">
-                          {item.interview_type}
-                        </td>
-                        <td className="py-4 px-6">
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                            item.difficulty.toLowerCase() === 'pro'
-                              ? 'bg-error-container text-on-error-container border border-error/20'
-                              : item.difficulty.toLowerCase() === 'intermediate'
-                              ? 'bg-primary-fixed text-on-primary-fixed-variant'
-                              : 'bg-tertiary-container/10 text-tertiary font-bold'
-                          }`}>
-                            {item.difficulty}
-                          </span>
-                        </td>
-                        <td className="py-4 px-6 text-center">
-                          <span className={`font-display-lg text-base font-bold ${
-                            item.overall_score >= 80
-                              ? 'text-tertiary font-bold'
-                              : item.overall_score >= 60
-                              ? 'text-secondary'
-                              : 'text-error'
-                          }`}>
-                            {item.overall_score}%
-                          </span>
-                        </td>
-                        <td className="py-4 px-6 font-body-sm text-xs text-on-surface-variant">
-                          {formatDate(item.created_at)}
-                        </td>
-                        <td className="py-4 px-6 text-right">
-                          <div className="flex gap-2 justify-end">
-                            <button
-                              onClick={() => navigate(`/interview-evaluation?session_id=${item.id}`)}
-                              className="px-3 py-1.5 rounded bg-surface-container hover:bg-secondary-container hover:text-on-secondary font-label-sm text-xs text-secondary font-semibold transition-all cursor-pointer"
-                            >
-                              Results
-                            </button>
-                            <button
-                              onClick={() => handlePracticeAgain(item.id)}
-                              className="px-3 py-1.5 rounded bg-surface border border-outline-variant hover:bg-surface-container font-label-sm text-xs text-on-surface transition-all cursor-pointer"
-                              title="Practice again with same settings"
-                            >
-                              Retry
-                            </button>
-                            <button
-                              onClick={() => handleDeleteSession(item.id)}
-                              className="w-8 h-8 rounded bg-surface hover:bg-error-container hover:text-on-error-container text-on-surface-variant flex items-center justify-center transition-all cursor-pointer border border-transparent hover:border-error/10"
-                              title="Delete Record"
-                            >
-                              <span className="material-symbols-outlined text-[16px]">delete</span>
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                          </td>
+                          <td className="py-4 px-6 text-center">
+                            <span className={`font-display-lg text-base font-bold ${
+                              score >= 80
+                                ? 'text-emerald-600 font-bold'
+                                : score >= 60
+                                ? 'text-[#EC4899]'
+                                : 'text-error'
+                            }`}>
+                              {score}%
+                            </span>
+                          </td>
+                          <td className="py-4 px-6 font-body-sm text-xs text-on-surface-variant">
+                            {formatDate(item.created_at)}
+                          </td>
+                          <td className="py-4 px-6 text-right">
+                            <div className="flex gap-2 justify-end">
+                              <button
+                                onClick={() => navigate(`/interview-evaluation?sessionId=${item.id}`)}
+                                className="px-3 py-1.5 rounded bg-surface-container hover:bg-[#EC4899]/10 hover:text-[#EC4899] font-label-sm text-xs text-on-surface font-semibold transition-all cursor-pointer"
+                              >
+                                Results
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

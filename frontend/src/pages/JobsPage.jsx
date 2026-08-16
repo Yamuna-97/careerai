@@ -5,6 +5,7 @@ import JobSearchSetup from '../components/jobs/JobSearchSetup';
 import JobResults from '../components/jobs/JobResults';
 import SavedJobsPanel from '../components/jobs/SavedJobsPanel';
 import JobDetailModal from '../components/jobs/JobDetailModal';
+import apiClient from '../api/client';
 
 export default function JobsPage() {
   const location = useLocation();
@@ -44,21 +45,16 @@ export default function JobsPage() {
   const checkProfile = async () => {
     setIsLoadingProfile(true);
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch("http://localhost:8000/api/v1/jobs/profile", {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.profile_exists) {
-          setProfileExists(true);
-          fetchDashboardStats();
-        } else if (data.has_resume) {
-          setProfileDraft(data.extracted_draft);
-          setProfileExists(false);
-        } else {
-          setProfileExists(false);
-        }
+      const res = await apiClient.get('/jobs/profile');
+      const data = res.data;
+      if (data.profile_exists) {
+        setProfileExists(true);
+        fetchDashboardStats();
+      } else if (data.has_resume) {
+        setProfileDraft(data.extracted_draft);
+        setProfileExists(false);
+      } else {
+        setProfileExists(false);
       }
     } catch (e) {
       console.error("Failed to fetch profile settings status:", e);
@@ -69,23 +65,11 @@ export default function JobsPage() {
 
   const fetchDashboardStats = async () => {
     try {
-      const token = localStorage.getItem('token');
-      
-      // Fetch saved jobs list
-      const savedRes = await fetch("http://localhost:8000/api/v1/jobs/saved", {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      let savedCount = 0;
-      let appCount = 0;
-      let interviewCount = 0;
-      
-      if (savedRes.ok) {
-        const data = await savedRes.json();
-        const list = data.jobs || [];
-        savedCount = list.length;
-        appCount = list.filter(j => j.status === 'applied').length;
-        interviewCount = list.filter(j => j.status === 'interview').length;
-      }
+      const res = await apiClient.get('/jobs/saved');
+      const list = res.data?.jobs || [];
+      const savedCount = list.length;
+      const appCount = list.filter(j => j.status === 'applied').length;
+      const interviewCount = list.filter(j => j.status === 'interview').length;
 
       setStats(prev => ({
         ...prev,
@@ -103,21 +87,12 @@ export default function JobsPage() {
     setIsLoadingProfile(true);
     
     try {
-      const token = localStorage.getItem('token');
-      // Fetch latest resume data
-      const res = await fetch("http://localhost:8000/api/v1/resumes", {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      
-      if (res.ok) {
-        const resumes = await res.json();
-        if (resumes.length > 0) {
-          // Recheck profile triggers auto-extract automatically on backend
-          await checkProfile();
-        } else {
-          alert("No resumes found to extract. Setup manually.");
-          setIsLoadingProfile(false);
-        }
+      const res = await apiClient.get('/resumes');
+      if (res.data?.length > 0) {
+        await checkProfile();
+      } else {
+        alert("No resumes found to extract. Setup manually.");
+        setIsLoadingProfile(false);
       }
     } catch (e) {
       console.error(e);
@@ -128,32 +103,14 @@ export default function JobsPage() {
   const handleToggleSaveDetailJob = async () => {
     if (!selectedJob) return;
     try {
-      const token = localStorage.getItem('token');
       if (selectedJob.is_saved) {
-        // Unsave
-        const res = await fetch(`http://localhost:8000/api/v1/jobs/${selectedJob.saved_id || selectedJob.id}/save`, {
-          method: "DELETE",
-          headers: { "Authorization": `Bearer ${token}` }
-        });
-        if (res.ok) {
-          setSelectedJob(prev => ({ ...prev, is_saved: false, saved_id: null }));
-          fetchDashboardStats();
-        }
+        await apiClient.delete(`/jobs/${selectedJob.saved_id || selectedJob.id}/save`);
+        setSelectedJob(prev => ({ ...prev, is_saved: false, saved_id: null }));
+        fetchDashboardStats();
       } else {
-        // Save
-        const res = await fetch(`http://localhost:8000/api/v1/jobs/${selectedJob.id}/save`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${token}`
-          },
-          body: JSON.stringify(selectedJob)
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setSelectedJob(prev => ({ ...prev, is_saved: true, saved_id: data.saved_id }));
-          fetchDashboardStats();
-        }
+        const res = await apiClient.post(`/jobs/${selectedJob.id}/save`, selectedJob);
+        setSelectedJob(prev => ({ ...prev, is_saved: true, saved_id: res.data?.saved_id }));
+        fetchDashboardStats();
       }
     } catch (e) {
       console.error(e);
@@ -190,7 +147,7 @@ export default function JobsPage() {
               {/* Dashboard stats panel */}
               <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="bg-surface border border-outline-variant/40 rounded-xl p-4 flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-lg bg-[#EC4899]/10 text-[#EC4899] flex items-center justify-center">
                     <span className="material-symbols-outlined">recommend</span>
                   </div>
                   <div>
@@ -200,7 +157,7 @@ export default function JobsPage() {
                 </div>
 
                 <div className="bg-surface border border-outline-variant/40 rounded-xl p-4 flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-teal-500/10 text-teal-600 flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-lg bg-[#FF8A3D]/10 text-[#FF8A3D] flex items-center justify-center">
                     <span className="material-symbols-outlined">bookmark</span>
                   </div>
                   <div>
@@ -210,7 +167,7 @@ export default function JobsPage() {
                 </div>
 
                 <div className="bg-surface border border-outline-variant/40 rounded-xl p-4 flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-secondary/10 text-secondary flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-lg bg-[#EC4899]/10 text-[#EC4899] flex items-center justify-center">
                     <span className="material-symbols-outlined">send</span>
                   </div>
                   <div>
@@ -220,7 +177,7 @@ export default function JobsPage() {
                 </div>
 
                 <div className="bg-surface border border-outline-variant/40 rounded-xl p-4 flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-amber-500/10 text-amber-600 flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-lg bg-[#FF8A3D]/10 text-[#FF8A3D] flex items-center justify-center">
                     <span className="material-symbols-outlined">event</span>
                   </div>
                   <div>
@@ -236,8 +193,8 @@ export default function JobsPage() {
                   onClick={() => setActiveTab('recommended')}
                   className={`px-4 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer ${
                     activeTab === 'recommended'
-                      ? 'border-primary text-primary'
-                      : 'border-transparent text-on-surface-variant hover:text-primary'
+                      ? 'border-[#EC4899] text-[#EC4899]'
+                      : 'border-transparent text-on-surface-variant hover:text-[#EC4899]'
                   }`}
                 >
                   Recommended Jobs
@@ -246,8 +203,8 @@ export default function JobsPage() {
                   onClick={() => setActiveTab('saved')}
                   className={`px-4 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer ${
                     activeTab === 'saved'
-                      ? 'border-primary text-primary'
-                      : 'border-transparent text-on-surface-variant hover:text-primary'
+                      ? 'border-[#EC4899] text-[#EC4899]'
+                      : 'border-transparent text-on-surface-variant hover:text-[#EC4899]'
                   }`}
                 >
                   Saved Jobs & Tracker

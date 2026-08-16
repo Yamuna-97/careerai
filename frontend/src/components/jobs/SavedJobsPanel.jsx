@@ -1,4 +1,5 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
+import apiClient from '../../api/client';
 
 const TRACKER_STAGES = [
   { value: 'saved', label: 'Saved Opportunities' },
@@ -20,16 +21,10 @@ export default function SavedJobsPanel({ onOpenJobDetails }) {
 
   const fetchSavedJobs = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch("http://localhost:8000/api/v1/jobs/saved", {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setSavedJobs(data.jobs || []);
-      }
+      const res = await apiClient.get('/jobs/saved');
+      setSavedJobs(res.data?.jobs || []);
     } catch (e) {
-      console.error(e);
+      console.error("Failed to fetch saved jobs:", e);
     } finally {
       setIsLoading(false);
     }
@@ -37,27 +32,13 @@ export default function SavedJobsPanel({ onOpenJobDetails }) {
 
   const handleUpdateStatus = async (jobId, newStatus) => {
     try {
-      const token = localStorage.getItem('token');
-      
-      // Update app status
-      const res = await fetch("http://localhost:8000/api/v1/jobs/applications", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          saved_job_id: jobId,
-          status: newStatus
-        })
+      await apiClient.post('/jobs/applications', {
+        saved_job_id: jobId,
+        status: newStatus
       });
-
-      if (res.ok) {
-        // Optimistically update status
-        setSavedJobs(prev => prev.map(job => 
-          job.id === jobId ? { ...job, status: newStatus } : job
-        ));
-      }
+      setSavedJobs(prev => prev.map(job => 
+        job.id === jobId ? { ...job, status: newStatus } : job
+      ));
     } catch (e) {
       console.error(e);
     }
@@ -66,24 +47,14 @@ export default function SavedJobsPanel({ onOpenJobDetails }) {
   const handleSaveNotes = async () => {
     if (!selectedNotesJob) return;
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:8000/api/v1/jobs/applications/${selectedNotesJob.application_id || selectedNotesJob.id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          status: selectedNotesJob.status,
-          notes: notesText
-        })
+      await apiClient.put(`/jobs/applications/${selectedNotesJob.application_id || selectedNotesJob.id}`, {
+        status: selectedNotesJob.status,
+        notes: notesText
       });
-      if (res.ok) {
-        setSavedJobs(prev => prev.map(job => 
-          job.id === selectedNotesJob.id ? { ...job, notes: notesText } : job
-        ));
-        setSelectedNotesJob(null);
-      }
+      setSavedJobs(prev => prev.map(job => 
+        job.id === selectedNotesJob.id ? { ...job, notes: notesText } : job
+      ));
+      setSelectedNotesJob(null);
     } catch (e) {
       console.error(e);
     }
@@ -92,14 +63,8 @@ export default function SavedJobsPanel({ onOpenJobDetails }) {
   const handleRemoveBookmark = async (id) => {
     if (!window.confirm("Remove this bookmark and delete tracker logs?")) return;
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:8000/api/v1/jobs/${id}/save`, {
-        method: "DELETE",
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      if (res.ok) {
-        setSavedJobs(prev => prev.filter(job => job.id !== id));
-      }
+      await apiClient.delete(`/jobs/${id}/save`);
+      setSavedJobs(prev => prev.filter(job => job.id !== id));
     } catch (e) {
       console.error(e);
     }

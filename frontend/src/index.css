@@ -15,13 +15,15 @@
   }
 }
 
-/* AI Gradients */
-.ai-gradient {
-  background: linear-gradient(135deg, #4F46E5 0%, #8A4CFC 100%);
+/* CareerAI Sunset Brand Gradient (#EC4899 -> #FF8A3D) */
+.ai-gradient,
+.bg-brand-gradient {
+  background: linear-gradient(90deg, #EC4899 0%, #FF8A3D 100%) !important;
 }
 
-.ai-text-gradient {
-  background: linear-gradient(135deg, #4F46E5 0%, #8A4CFC 100%);
+.ai-text-gradient,
+.text-brand-gradient {
+  background: linear-gradient(90deg, #EC4899 0%, #FF8A3D 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
@@ -67,8 +69,8 @@
 
 /* Input Focus Glow */
 .input-focus-ring:focus {
-  box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.15);
-  border-color: #4f46e5;
+  box-shadow: 0 0 0 4px rgba(236, 72, 153, 0.18);
+  border-color: #EC4899;
 }
 
 /* Editor Scrollbar */
@@ -83,3 +85,4 @@
   background-color: #c7c4d8;
   border-radius: 9999px;
 }
+

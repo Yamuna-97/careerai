@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../utils/supabase';
+import apiClient from '../api/client';
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -28,32 +29,22 @@ export default function LoginPage() {
 
       const session = data.session;
       if (session) {
-        // Save the access token for API requests
+        // Save the access token for API requests under unified key
+        localStorage.setItem('access_token', session.access_token);
         localStorage.setItem('token', session.access_token);
         
-        // Sync user profile to backend local database
-        const syncRes = await fetch("http://localhost:8000/api/v1/auth/sync", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${session.access_token}`
-          },
-          body: JSON.stringify({
-            id: session.user.id,
-            email: session.user.email,
-            full_name: session.user.user_metadata?.full_name || session.user.email.split('@')[0]
-          })
+        // Sync user profile to backend local database using centralized API client
+        await apiClient.post('/auth/sync', {
+          id: session.user.id,
+          email: session.user.email,
+          full_name: session.user.user_metadata?.full_name || session.user.email.split('@')[0]
         });
 
-        if (syncRes.ok) {
-          navigate('/dashboard');
-        } else {
-          setErrorMsg("Could not sync user profile with database.");
-        }
+        navigate('/dashboard');
       }
     } catch (err) {
       console.error(err);
-      setErrorMsg("An unexpected login error occurred.");
+      setErrorMsg(err.response?.data?.detail || "Could not sync user profile with database.");
     } finally {
       setIsSubmitting(false);
     }
@@ -138,7 +129,7 @@ export default function LoginPage() {
           </div>
 
           <button
-            className="w-full bg-primary-container text-on-primary rounded-lg py-3 font-label-md text-label-md hover:bg-[#4338CA] transition-colors shadow-sm active:scale-[0.98] cursor-pointer disabled:opacity-50"
+            className="w-full text-white rounded-lg py-3 font-label-md text-label-md shadow-sm active:scale-[0.98] cursor-pointer disabled:opacity-50 bg-gradient-to-r from-[#EC4899] to-[#FF8A3D] hover:opacity-90 transition-all"
             type="submit"
             disabled={isSubmitting}
           >

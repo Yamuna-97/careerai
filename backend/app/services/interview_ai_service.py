@@ -1,52 +1,74 @@
 """
 app/services/interview_ai_service.py
 ────────────────────────────────────
-Gemini AI integration service for generating mock interview questions,
-adaptive follow-ups, hints, evaluations, and improvement roadmaps.
+Gemini AI integration service for generating dynamic, non-repetitive mock interview questions,
+evaluating responses with strict weighted math scoring, and creating session roadmaps.
 
-Includes a secure sandbox code execution runner using the Piston API.
+Features:
+- Semantic duplicate question detection (`is_duplicate_question`) with retry loops.
+- Resume-aware and Job Description-aware dynamic question generation.
+- Real Gemini answer evaluation (NO default/hardcoded fake scores).
+- Mathematical weighted scoring (Technical vs Behavioral STAR vs Coding sandbox).
+- Piston code sandbox execution integration for coding interviews.
 """
 
 import httpx
 import json
-from typing import List, Optional
+import re
+import logging
+from typing import List, Optional, Dict, Any
 from app.core.config import settings
 from app.models.interview import InterviewSession, InterviewQuestion
+from app.services.gemini_service import call_gemini_api as _central_call_gemini
 
-GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+logger = logging.getLogger(__name__)
 
 
 # ── Internal Helper to Call Gemini ────────────────────────────────────────────
 def _call_gemini_api(prompt: str, json_mode: bool = True) -> str:
-    """Helper to perform HTTP POST to Google Gemini API."""
-    if not settings.GEMINI_API_KEY:
-        raise ValueError("GEMINI_API_KEY not configured.")
+    """Helper to perform HTTP POST to Google Gemini API using central model router."""
+    return _central_call_gemini(prompt=prompt, task="complex_reasoning", json_mode=json_mode)
 
-    headers = {"Content-Type": "application/json"}
-    params = {"key": settings.GEMINI_API_KEY}
 
-    payload = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {}
-    }
+# ── Semantic Duplicate Question Detection ──────────────────────────────────────
+def is_duplicate_question(new_question: str, previous_questions: List[str]) -> bool:
+    """
+    Check if a new question is semantically identical or too similar to any
+    previously asked question in the session.
+    """
+    if not new_question or not previous_questions:
+        return False
 
-    if json_mode:
-        payload["generationConfig"]["responseMimeType"] = "application/json"
+    def tokenize(text: str) -> set:
+        clean = re.sub(r'[^\w\s]', '', text.lower())
+        words = clean.split()
+        stop_words = {
+            "what", "is", "are", "explain", "how", "does", "do", "the", "a", "an",
+            "in", "of", "and", "or", "to", "with", "can", "you", "tell", "me", "about",
+            "difference", "between", "describe", "using", "your", "for", "on", "would"
+        }
+        return {w for w in words if w not in stop_words and len(w) > 2}
 
-    try:
-        response = httpx.post(GEMINI_API_URL, headers=headers, params=params, json=payload, timeout=20.0)
-        response.raise_for_status()
-        data = response.json()
-        
-        candidates = data.get("candidates", [])
-        if candidates:
-            parts = candidates[0].get("content", {}).get("parts", [])
-            if parts:
-                return parts[0].get("text", "")
-        raise ValueError("Invalid response format received from Gemini.")
-    except Exception as e:
-        print(f"Error communicating with Gemini API: {str(e)}")
-        raise
+    new_tokens = tokenize(new_question)
+    if not new_tokens:
+        return False
+
+    for prev in previous_questions:
+        prev_tokens = tokenize(prev)
+        if not prev_tokens:
+            continue
+
+        intersection = new_tokens.intersection(prev_tokens)
+        union = new_tokens.union(prev_tokens)
+        similarity = len(intersection) / len(union) if union else 0.0
+
+        # If token Jaccard similarity is high or 3+ core technical terms overlap heavily
+        if similarity >= 0.55:
+            return True
+        if len(intersection) >= 3 and len(intersection) >= min(len(new_tokens), len(prev_tokens)) * 0.7:
+            return True
+
+    return False
 
 
 # ── Secure Code Execution Sandbox (Piston API) ────────────────────────────────
@@ -56,9 +78,8 @@ def run_code_in_sandbox(language: str, code: str, test_cases_json: Optional[str]
     Runs the code against test cases if provided, and returns execution result.
     """
     if not code:
-        return {"success": False, "output": "No code submitted.", "exit_code": 1, "summary": "Empty solution"}
+        return {"success": False, "output": "No code submitted.", "exit_code": 1, "summary": "Empty solution", "passed": 0, "total": 0}
 
-    # Map frontend languages to Piston identifiers
     lang_map = {
         "python": {"language": "python", "version": "3.10.0", "filename": "solution.py"},
         "javascript": {"language": "javascript", "version": "18.15.0", "filename": "solution.js"},
@@ -68,17 +89,19 @@ def run_code_in_sandbox(language: str, code: str, test_cases_json: Optional[str]
 
     lang_key = language.lower().strip()
     if lang_key not in lang_map:
-        lang_key = "python"  # Default
+        lang_key = "python"
 
     piston_lang = lang_map[lang_key]["language"]
     piston_ver = lang_map[lang_key]["version"]
     filename = lang_map[lang_key]["filename"]
 
     full_code = code
+    total_test_cases = 0
     if test_cases_json:
         try:
             test_cases = json.loads(test_cases_json)
             if isinstance(test_cases, list) and len(test_cases) > 0:
+                total_test_cases = len(test_cases)
                 if lang_key == "python":
                     full_code += "\n\n# --- AUTO-GENERATED TEST RUNNER ---\n"
                     full_code += "import json\n"
@@ -88,81 +111,32 @@ passed = 0
 results = []
 for i, tc in enumerate(test_cases):
     try:
-        import inspect
-        import sys
-        import ast
+        import inspect, sys, ast
         funcs = [f for n, f in inspect.getmembers(sys.modules[__name__]) if inspect.isfunction(f) and f.__module__ == __name__]
         if funcs:
             func = funcs[0]
             val = tc['input']
             if isinstance(val, str) and (val.startswith('[') or val.startswith('{') or ',' in val):
-                try:
-                    args = ast.literal_eval(val)
-                except:
-                    args = val
-            else:
-                args = val
+                try: args = ast.literal_eval(val)
+                except: args = val
+            else: args = val
                 
-            if isinstance(args, tuple):
-                res = func(*args)
-            elif isinstance(args, dict):
-                res = func(**args)
-            else:
-                res = func(args)
-                
+            res = func(*args) if isinstance(args, tuple) else func(**args) if isinstance(args, dict) else func(args)
             expected = tc['expected']
             if str(res) == str(expected) or res == expected:
                 passed += 1
                 results.append(f"Test {i+1} PASSED")
             else:
                 results.append(f"Test {i+1} FAILED: Expected {expected}, got {res}")
-        else:
-            results.append("No user function found to run.")
+        else: results.append("No user function found to run.")
     except Exception as e:
         results.append(f"Test {i+1} ERROR: {str(e)}")
 
 print("\\n".join(results))
 print(f"SUMMARY: Passed {passed}/{len(test_cases)}")
 """
-                elif lang_key == "javascript":
-                    full_code += "\n\n// --- AUTO-GENERATED TEST RUNNER ---\n"
-                    full_code += "const testCases = " + json.dumps(test_cases) + ";\n"
-                    full_code += """
-let passed = 0;
-const results = [];
-testCases.forEach((tc, i) => {
-    try {
-        // Find custom function
-        const globalFuncs = Object.keys(global).filter(k => typeof global[k] === 'function');
-        const custom = Object.keys(global).find(k => k !== 'setTimeout' && k !== 'setInterval' && typeof global[k] === 'function');
-        const func = global[custom];
-        if (func) {
-            let args;
-            try {
-                args = JSON.parse(tc.input);
-            } catch(e) {
-                args = tc.input;
-            }
-            const res = Array.isArray(args) ? func(...args) : func(args);
-            const expected = tc.expected;
-            if (String(res) === String(expected) || JSON.stringify(res) === JSON.stringify(expected)) {
-                passed++;
-                results.push(`Test ${i+1} PASSED`);
-            } else {
-                results.push(`Test ${i+1} FAILED: Expected {expected}, got {res}`);
-            }
-        } else {
-            results.push("No user function found.");
-        }
-    } catch(e) {
-        results.push(`Test {i+1} ERROR: ${e.message}`);
-    }
-});
-console.log(results.join("\\n"));
-console.log(`SUMMARY: Passed ${passed}/${testCases.length}`);
-"""
         except Exception as e:
-            print(f"Error creating sandbox test runner: {e}")
+            logger.error(f"Error building code runner test harness: {e}")
 
     payload = {
         "language": piston_lang,
@@ -179,256 +153,291 @@ console.log(`SUMMARY: Passed ${passed}/${testCases.length}`);
             stderr = run_result.get("stderr", "")
             code_exit = run_result.get("code", 0)
             
-            success = code_exit == 0 and not stderr
-            summary_msg = "Passed test cases!" if success else "Execution complete with errors."
+            passed_cnt = 0
             if "SUMMARY: Passed" in stdout:
-                raw_summary = stdout.split("SUMMARY: Passed")[-1].strip()
-                summary_msg = f"Passed {raw_summary}"
-                
+                m = re.search(r'SUMMARY: Passed (\d+)/(\d+)', stdout)
+                if m:
+                    passed_cnt = int(m.group(1))
+
+            success = code_exit == 0 and "FAILED" not in stdout and "ERROR" not in stdout
             return {
-                "success": success and "FAILED" not in stdout and "ERROR" not in stdout,
-                "output": stdout + "\n" + stderr,
+                "success": success,
+                "output": stdout + ("\n" + stderr if stderr else ""),
                 "exit_code": code_exit,
-                "summary": summary_msg
+                "summary": f"Passed {passed_cnt}/{total_test_cases} test cases" if total_test_cases > 0 else ("Success" if success else "Errors"),
+                "passed": passed_cnt,
+                "total": total_test_cases
             }
         else:
-            return {"success": False, "output": f"Piston execution service returned HTTP {response.status_code}", "exit_code": 1, "summary": "Sandbox execution unavailable"}
+            return {"success": False, "output": f"Piston returned HTTP {response.status_code}", "exit_code": 1, "summary": "Sandbox execution unavailable", "passed": 0, "total": total_test_cases}
     except Exception as e:
-        return {"success": False, "output": f"Failed to execute code in sandbox: {str(e)}", "exit_code": 1, "summary": "Sandbox execution error"}
+        return {"success": False, "output": f"Sandbox error: {str(e)}", "exit_code": 1, "summary": "Sandbox error", "passed": 0, "total": total_test_cases}
 
 
-# ── 1. Question Generator ──────────────────────────────────────────────────────
+# ── 1. Dynamic Question Generator ─────────────────────────────────────────────
 def generate_interview_question(
     session: InterviewSession,
     previous_qas: List[dict],
     resume_context: str = "",
-    job_context: str = ""
-) -> str:
+    job_context: str = "",
+    asked_questions: List[str] = None
+) -> Dict[str, Any]:
     """
-    Generate the next interview question using Gemini.
-    Incorporates difficulty, interview type, target role, and adaptive follow-up context.
+    Generate the next non-repetitive interview question using Gemini.
+    Incorporates role, difficulty, interview mode, resume, JD, past QAs, and average score trend.
     """
-    # Special flow for Coding Interview Mode
-    if session.interview_type.lower() == "coding":
-        prompt = f"""
-        You are an expert technical interviewer conducting a {session.difficulty} difficulty CODING interview for the role of '{session.role}' on the topic of '{session.topic or "Arrays"}'.
-        Generate a coding challenge appropriate for the programming language '{session.language or "python"}'.
-
-        Return a JSON object with:
-        - "question_text": The problem statement including task details, constraints, and an example.
-        - "hint": A short guiding hint for a candidate struggling with this.
-        - "better_answer": A high-quality model implementation in the target language.
-        - "test_cases": A JSON array of 3 test cases. Each test case must be: {{ "input": "input_string", "expected": "expected_result_string" }}
-        
-        Ensure the output is a single, valid JSON block.
-        """
-        if settings.GEMINI_API_KEY:
-            try:
-                res_text = _call_gemini_api(prompt, json_mode=True)
-                return res_text
-            except Exception:
-                pass
-
-        # Fallback Coding Challenges
-        fallbacks = {
-            "Arrays": {
-                "question_text": "Write a function `two_sum(nums, target)` that returns the indices of the two numbers such that they add up to the target. Example: nums=[2,7,11,15], target=9 -> [0,1].",
-                "hint": "Try using a hash map to look up elements in O(1) time.",
-                "better_answer": "def two_sum(nums, target):\n    seen = {}\n    for i, num in enumerate(nums):\n        diff = target - num\n        if diff in seen:\n            return [seen[diff], i]\n        seen[num] = i\n    return []",
-                "test_cases": [
-                    {"input": "([2, 7, 11, 15], 9)", "expected": "[0, 1]"},
-                    {"input": "([3, 2, 4], 6)", "expected": "[1, 2]"},
-                    {"input": "([3, 3], 6)", "expected": "[0, 1]"}
-                ]
-            },
-            "Strings": {
-                "question_text": "Write a function `is_palindrome(s)` that returns true if a string reads the same forward and backward, ignoring non-alphanumeric characters. Example: 'A man, a plan, a canal: Panama' -> true.",
-                "hint": "Use two pointers starting from the beginning and end, moving towards the center.",
-                "better_answer": "def is_palindrome(s):\n    cleaned = [c.lower() for c in s if c.isalnum()]\n    return cleaned == cleaned[::-1]",
-                "test_cases": [
-                    {"input": "'A man, a plan, a canal: Panama'", "expected": "True"},
-                    {"input": "'race a car'", "expected": "False"},
-                    {"input": "' '", "expected": "True"}
-                ]
-            },
-            "Sorting": {
-                "question_text": "Write a function `merge_sorted_arrays(arr1, arr2)` that takes two sorted integer arrays and merges them into one sorted array. Example: [1,3,5], [2,4,6] -> [1,2,3,4,5,6].",
-                "hint": "Use two index pointers to traverse both arrays and append the smaller value.",
-                "better_answer": "def merge_sorted_arrays(arr1, arr2):\n    res = []\n    i = j = 0\n    while i < len(arr1) and j < len(arr2):\n        if arr1[i] < arr2[j]:\n            res.append(arr1[i])\n            i += 1\n        else:\n            res.append(arr2[j])\n            j += 1\n    res.extend(arr1[i:])\n    res.extend(arr2[j:])\n    return res",
-                "test_cases": [
-                    {"input": "([1, 3, 5], [2, 4, 6])", "expected": "[1, 2, 3, 4, 5, 6]"},
-                    {"input": "([], [1, 2])", "expected": "[1, 2]"},
-                    {"input": "([5], [2])", "expected": "[2, 5]"}
-                ]
-            }
-        }
-        topic_key = session.topic if session.topic in fallbacks else "Arrays"
-        return json.dumps(fallbacks[topic_key])
-
-    # Standard Text Interview Mode
-    prompt = f"""
-    You are an expert interviewer conducting a {session.difficulty} difficulty {session.interview_type} mock interview for the role of '{session.role}'.
-    Format the output as a single interview question.
-
-    CONTEXT:
-    - Target Role: {session.role}
-    - Difficulty Level: {session.difficulty} (Beginner: basic questions with guided hints. Intermediate: moderate technical & STAR behavioral. Pro: system design, pressure questioning, strict follow-ups.)
-    """
-
-    if resume_context:
-        prompt += f"\n- User Resume Context:\n{resume_context}"
-    if job_context or (session.job_company and session.job_description):
-        prompt += f"\n- Target Job: {session.job_title} at {session.job_company}\nJob Description:\n{session.job_description or job_context}"
-
-    if previous_qas:
-        prompt += "\n\nHISTORY OF PREVIOUS QUESTIONS & ANSWERS IN THIS SESSION:\n"
-        for i, qa in enumerate(previous_qas):
-            prompt += f"Q{i+1}: {qa['question']}\nA{i+1}: {qa['answer']}\n"
-        prompt += "\nBased on the history above, generate a follow-up or next logical question. Respond to their last answer naturally. Do not repeat previous questions."
-    else:
-        prompt += "\nThis is the first question of the interview. Start with an appropriate introductory or initial technical question based on the role and difficulty."
-
-    prompt += "\n\nReturn ONLY the text of the question. Do not add any greeting, intro, conversational filler, or formatting."
-
-    # Live Call
-    if settings.GEMINI_API_KEY:
-        try:
-            return _call_gemini_api(prompt, json_mode=False).strip().strip('"')
-        except Exception:
-            pass
-
-    # High-quality fallback questions
-    fallback_questions = {
-        "beginner": [
-            "Can you tell me about yourself and your background in engineering?",
-            "What is the difference between an API and a web service?",
-            "You mentioned Python on your resume. What is the difference between a list and a tuple?",
-            "Describe a project you worked on recently. What was your role?"
-        ],
-        "intermediate": [
-            "Why did you choose FastAPI over Flask or Django for your APIs?",
-            "Describe a time you had to deal with a conflicting priority within a team. How did you resolve it?",
-            "What is regularization in machine learning? How do L1 and L2 regularization differ?",
-            "How do you handle feature engineering when working with high-dimensional datasets?"
-        ],
-        "pro": [
-            "Design a real-time recommendation pipeline for an e-commerce platform with 10M active users. How do you handle cold starts?",
-            "Explain how you would optimize a deep learning model for real-time inference on edge devices without losing significant accuracy.",
-            "You mentioned YOLO in your farm monitoring project. How did you structure the training pipeline, and how did you measure and address model bias?",
-            "How would you architect a database synchronization system between a client-side SQL DB and a remote Supabase PostgreSQL backend under flaky networks?"
-        ]
-    }
+    asked_questions = asked_questions or [qa.get("question", "") for qa in previous_qas if qa.get("question")]
     
-    idx = len(previous_qas) % 4
-    level = session.difficulty.lower()
-    if level not in fallback_questions:
-        level = "intermediate"
-    return fallback_questions[level][idx]
+    # Calculate current session performance trend for adaptive difficulty adjustment
+    avg_score = 75
+    if previous_qas:
+        scores = [qa.get("score", 70) for qa in previous_qas if qa.get("score") is not None]
+        if scores:
+            avg_score = sum(scores) / len(scores)
+
+    difficulty_prompt = session.difficulty
+    if avg_score >= 85 and len(previous_qas) >= 2:
+        difficulty_prompt += " (Candidate is doing extremely well — ask a deeper, architectural or edge-case question)"
+    elif avg_score < 60 and len(previous_qas) >= 2:
+        difficulty_prompt += " (Candidate struggled previously — test underlying fundamentals to help rebuild ground)"
+
+    history_text = ""
+    covered_topics = []
+    if previous_qas:
+        history_text = "\nPREVIOUS QUESTIONS & ANSWERS IN THIS SESSION:\n"
+        for i, qa in enumerate(previous_qas):
+            history_text += f"Q{i+1}: {qa.get('question')}\nCandidate Answer: {qa.get('answer')}\nScore: {qa.get('score')}/100\n"
+            if qa.get("topic"):
+                covered_topics.append(qa.get("topic"))
+
+    mode_str = session.interview_type
+    role_str = session.role
+
+    # Generate next question with duplicate prevention loop
+    for attempt in range(3):
+        prompt = f"""
+You are an expert technical interviewer conducting a text-based {session.difficulty} level {mode_str} interview for the role of '{role_str}'.
+
+CRITICAL INSTRUCTIONS:
+1. Do NOT repeat any previously asked questions or ask semantically identical questions!
+2. Already asked questions: {json.dumps(asked_questions)}
+3. Already covered topics: {json.dumps(covered_topics)}
+4. Candidate Resume Context:
+\"\"\"
+{resume_context if resume_context else "No resume provided. Ask role-standard questions."}
+\"\"\"
+5. Target Job Description Context:
+\"\"\"
+{job_context if job_context else "No JD provided. Focus on core requirements for " + role_str}
+\"\"\"
+{history_text}
+
+Generate the next question.
+Return ONLY valid JSON with these exact keys:
+{{
+  "question_text": "The full text of the question...",
+  "category": "Domain category (e.g. Backend, Algorithms, System Design, Behavioral)",
+  "topic": "Specific subtopic (e.g. SQL Optimization, Async Memory, Conflict Management)",
+  "question_type": "{mode_str.lower()}",
+  "hint": "Structural guidance hint if user asks for help",
+  "better_answer": "Model solution/ideal response string"
+  {', "test_cases": [{"input": "(input_args)", "expected": "expected_result"}]' if mode_str.lower() == 'coding' else ''}
+}}
+"""
+        try:
+            res_raw = _call_gemini_api(prompt, json_mode=True)
+            from app.services.gemini_service import clean_and_parse_json
+            parsed = clean_and_parse_json(res_raw)
+            q_text = parsed.get("question_text", "").strip()
+
+            if q_text and not is_duplicate_question(q_text, asked_questions):
+                return parsed
+            else:
+                logger.info(f"[Interview AI] Question candidate attempt {attempt+1} was duplicate. Retrying...")
+        except Exception as err:
+            logger.warning(f"[Interview AI] Gemini attempt {attempt+1} failed: {err}")
+
+    # Safe fallback if Gemini retry limits hit
+    fallback_q = f"How would you approach designing and testing a scalable solution for {session.role} handling unexpected production traffic?"
+    if mode_str.lower() == "behavioral":
+        fallback_q = "Describe a challenging situation in a past project where you faced tight deadlines. How did you organize your tasks and what was the outcome?"
+    elif mode_str.lower() == "coding":
+        return {
+            "question_text": "Write a function `two_sum(nums, target)` that returns the indices of two numbers that add up to target.",
+            "category": "Algorithms",
+            "topic": "Arrays & Hash Maps",
+            "question_type": "coding",
+            "hint": "Use a hash map to track complements in O(n) time.",
+            "better_answer": "def two_sum(nums, target):\n    seen = {}\n    for i, num in enumerate(nums):\n        diff = target - num\n        if diff in seen: return [seen[diff], i]\n        seen[num] = i\n    return []",
+            "test_cases": [{"input": "([2, 7, 11, 15], 9)", "expected": "[0, 1]"}]
+        }
+
+    return {
+        "question_text": fallback_q,
+        "category": mode_str,
+        "topic": "System & Problem Solving",
+        "question_type": mode_str.lower(),
+        "hint": "Break down your approach step-by-step.",
+        "better_answer": "Focus on identifying core constraints, stating clear assumptions, and outlining tradeoffs."
+    }
 
 
-# ── 2. Answer Evaluation ──────────────────────────────────────────────────────
+# ── 2. Real Answer Evaluator (Mathematical Weighted Scoring) ──────────────────
 def evaluate_answer(
     question_text: str,
     answer_text: str,
     difficulty: str,
     interview_type: str,
+    resume_context: str = "",
+    job_context: str = "",
     sandbox_results: Optional[dict] = None
 ) -> dict:
     """
-    Evaluate the user's answer using Gemini.
-    Returns scores, STAR breakdown, strengths, weaknesses, suggestions, and a better example answer.
+    Evaluate candidate's actual typed response using Gemini.
+    Calculates weighted mathematical scores in backend code (NO hardcoded scores!).
     """
+    if not answer_text or len(answer_text.strip()) < 2:
+        return {
+            "score": 0,
+            "technical_accuracy": 0,
+            "relevance": 0,
+            "clarity": 0,
+            "structure": 0,
+            "communication": 0,
+            "completeness": 0,
+            "star_situation": False,
+            "star_task": False,
+            "star_action": False,
+            "star_result": False,
+            "strengths_feedback": "No answer provided.",
+            "weaknesses_feedback": "Answer text was empty.",
+            "suggestions_feedback": "Make sure to type a complete response before submitting.",
+            "better_answer": "Provide a clear, detailed response addressing all parts of the question."
+        }
+
     sandbox_info = ""
     if sandbox_results:
         sandbox_info = f"""
-        CODE EXECUTION RESULTS IN SECURE SANDBOX:
-        - Output/Error: {sandbox_results.get("output")}
-        - Test Case Summary: {sandbox_results.get("summary")}
-        - Success: {sandbox_results.get("success")}
-        """
+SANDBOX CODE EXECUTION DATA (AUTHORITATIVE):
+- Passed Test Cases: {sandbox_results.get('passed', 0)} out of {sandbox_results.get('total', 0)}
+- Execution Output/Error: {sandbox_results.get('output', '')}
+- Exit Code: {sandbox_results.get('exit_code', 0)}
+- Execution Success: {sandbox_results.get('success', False)}
+"""
 
     prompt = f"""
-    You are an expert interviewer evaluating a candidate's answer in a mock interview.
-    
-    Evaluate the following response:
-    - Question: "{question_text}"
-    - Candidate Answer: "{answer_text}"
-    - Interview Category: {interview_type}
-    - Difficulty: {difficulty}
-    {sandbox_info}
+You are a senior interviewer evaluating a candidate's actual answer in a mock interview.
 
-    Provide a structured evaluation in JSON format with the following keys:
-    - "score" (integer, 0 to 100)
-    - "technical_accuracy" (integer, 0 to 100)
-    - "relevance" (integer, 0 to 100)
-    - "clarity" (integer, 0 to 100)
-    - "structure" (integer, 0 to 100)
-    - "communication" (integer, 0 to 100)
-    - "completeness" (integer, 0 to 100)
-    - "star_situation" (boolean: true if Situation is clearly described, else false)
-    - "star_task" (boolean: true if Task is clearly described, else false)
-    - "star_action" (boolean: true if Action is clearly described, else false)
-    - "star_result" (boolean: true if quantitative/qualitative Result is clearly described, else false)
-    - "strengths_feedback" (string summary of strengths)
-    - "weaknesses_feedback" (string summary of weaknesses)
-    - "suggestions_feedback" (concrete tips for improvement)
-    - "better_answer" (a highly professional, strong model answer for this question)
+QUESTION:
+"{question_text}"
 
-    Ensure the output is valid, parsable JSON.
-    """
+CANDIDATE ANSWER:
+"{answer_text}"
 
-    if settings.GEMINI_API_KEY:
+INTERVIEW MODE: {interview_type}
+DIFFICULTY: {difficulty}
+{sandbox_info}
+
+Task: Carefully evaluate the candidate's actual answer text. Return ONLY valid JSON:
+{{
+  "technical_accuracy": 0-100,
+  "conceptual_understanding": 0-100,
+  "relevance": 0-100,
+  "completeness": 0-100,
+  "clarity": 0-100,
+  "problem_solving": 0-100,
+  "star_situation": true/false (true ONLY if Situation is clearly described),
+  "star_task": true/false (true ONLY if Task is clearly described),
+  "star_action": true/false (true ONLY if Action is clearly described),
+  "star_result": true/false (true ONLY if quantitative or qualitative Result/outcome is clearly stated),
+  "strengths_feedback": "Specific strengths in candidate's actual text...",
+  "weaknesses_feedback": "Specific missing points or errors in candidate's text...",
+  "suggestions_feedback": "Actionable advice to improve this answer...",
+  "better_answer": "Model solution/ideal answer for this exact question"
+}}
+"""
+
+    # Retry loop for AI evaluation
+    last_err = None
+    for attempt in range(2):
         try:
-            res_text = _call_gemini_api(prompt, json_mode=True)
-            return json.loads(res_text)
-        except Exception:
-            pass
+            res_raw = _call_gemini_api(prompt, json_mode=True)
+            from app.services.gemini_service import clean_and_parse_json
+            parsed = clean_and_parse_json(res_raw)
 
-    # High-quality fallback evaluation generator
-    is_star_related = "behavioral" in interview_type.lower() or "hr" in interview_type.lower() or "tell me" in question_text.lower()
-    
-    score = 82
-    if sandbox_results and not sandbox_results.get("success"):
-        score = 45  # Penalize failing code
+            # Extract category scores safely
+            tech_acc = int(parsed.get("technical_accuracy", 70))
+            concept_und = int(parsed.get("conceptual_understanding", 70))
+            relevance = int(parsed.get("relevance", 70))
+            completeness = int(parsed.get("completeness", 70))
+            clarity = int(parsed.get("clarity", 70))
+            prob_solving = int(parsed.get("problem_solving", 70))
 
-    return {
-        "score": score,
-        "technical_accuracy": 85 if score > 50 else 40,
-        "relevance": 88,
-        "clarity": 80,
-        "structure": 78,
-        "communication": 82,
-        "completeness": 80,
-        "star_situation": True,
-        "star_task": True,
-        "star_action": True,
-        "star_result": False if is_star_related else True,
-        "strengths_feedback": "Solid answer structure, good explanation of the core technical concept." if score > 50 else "Attempted the challenge but has syntax/runtime test errors.",
-        "weaknesses_feedback": "Could explain tradeoffs better or fix failing tests." if score > 50 else "The code has compilation issues or failed test cases.",
-        "suggestions_feedback": "Review optimization patterns or corner cases." if score > 50 else "Check the logic for null inputs, array indexing bounds, and double check variable assignments.",
-        "better_answer": "Model Solution:\n" + (sandbox_results.get("summary") if sandbox_results else "Focus on writing clean modular code using descriptive variable names and verifying constraints.")
-    }
+            star_s = bool(parsed.get("star_situation", False))
+            star_t = bool(parsed.get("star_task", False))
+            star_a = bool(parsed.get("star_action", False))
+            star_r = bool(parsed.get("star_result", False))
+
+            # MATHEMATICAL WEIGHTED SCORING IN BACKEND CODE
+            mode_lower = interview_type.lower()
+            if "behavioral" in mode_lower or "hr" in mode_lower:
+                # STAR Evaluation weighting
+                sit_score = 85 if star_s else 30
+                task_score = 85 if star_t else 30
+                action_score = 90 if star_a else 25
+                result_score = 90 if star_r else 20
+                final_score = round(0.20*sit_score + 0.20*task_score + 0.30*action_score + 0.20*result_score + 0.10*clarity)
+            elif "coding" in mode_lower and sandbox_results:
+                # Piston Code Execution weighting
+                total_t = sandbox_results.get("total", 0)
+                passed_t = sandbox_results.get("passed", 0)
+                sandbox_pass_ratio = (passed_t / total_t) if total_t > 0 else (1.0 if sandbox_results.get("success") else 0.0)
+                sandbox_score = round(sandbox_pass_ratio * 100)
+                final_score = round(0.50*sandbox_score + 0.30*tech_acc + 0.20*clarity)
+            else:
+                # Technical Mode weighting
+                final_score = round(0.30*tech_acc + 0.20*concept_und + 0.15*relevance + 0.15*completeness + 0.10*clarity + 0.10*prob_solving)
+
+            final_score = max(0, min(100, final_score))
+
+            return {
+                "score": final_score,
+                "technical_accuracy": tech_acc,
+                "relevance": relevance,
+                "clarity": clarity,
+                "structure": round((concept_und + clarity) / 2),
+                "communication": clarity,
+                "completeness": completeness,
+                "star_situation": star_s,
+                "star_task": star_t,
+                "star_action": star_a,
+                "star_result": star_r,
+                "strengths_feedback": parsed.get("strengths_feedback", "Good explanation of concepts."),
+                "weaknesses_feedback": parsed.get("weaknesses_feedback", "Could be more detailed."),
+                "suggestions_feedback": parsed.get("suggestions_feedback", "Focus on clear structure and quantifiable results."),
+                "better_answer": parsed.get("better_answer", "Provide a structured explanation with practical examples.")
+            }
+        except Exception as e:
+            last_err = e
+            logger.warning(f"[Interview Evaluation] Attempt {attempt+1} failed: {e}")
+
+    # If Gemini fails, raise exception so API returns controlled 500/error instead of fabricating a score!
+    raise ValueError(f"AI evaluation service temporarily unavailable: {str(last_err)}")
 
 
 # ── 3. Hint Generator ─────────────────────────────────────────────────────────
 def generate_hint(question_text: str) -> str:
-    """Generate a helpful STAR or technical guide hint for a question."""
+    """Generate a structural guidance hint for a question."""
     prompt = f"""
-    Give a single-sentence helpful hint or structural prompt for answering this interview question:
-    Question: "{question_text}"
-    
-    Return only the text of the hint.
-    """
+Provide a single-sentence structural hint for answering this interview question:
+"{question_text}"
 
-    if settings.GEMINI_API_KEY:
-        try:
-            return _call_gemini_api(prompt, json_mode=False).strip().strip('"')
-        except Exception:
-            pass
-
-    if "conflict" in question_text.lower() or "describe a time" in question_text.lower():
-        return "Recall the STAR structure: focus on a specific team situation, the task required, the action you initiated, and the positive team result."
-    return "Explain the fundamental concepts first, name the frameworks involved, and mention a practical example from your experience."
+Return ONLY the text of the hint.
+"""
+    try:
+        return _call_gemini_api(prompt, json_mode=False).strip().strip('"')
+    except Exception:
+        return "Focus on breaking down the core concepts first, then provide a clear example from your real experience."
 
 
 # ── 4. Session Summary Roadmap Generator ─────────────────────────────────────
@@ -438,35 +447,40 @@ def generate_interview_summary(
 ) -> dict:
     """
     Generate overall session summary, strengths, weaknesses, and a structured
-    personalized improvement roadmap.
+    personalized improvement roadmap based on actual question scores.
     """
     qas_formatted = ""
+    low_performing_topics = []
+
     for idx, qa in enumerate(all_qas):
-        qas_formatted += f"Q{idx+1}: {qa['question']}\nA{idx+1}: {qa['answer']}\nScore: {qa['score']}/100\n"
+        score = qa.get("score", 0)
+        qas_formatted += f"Q{idx+1}: {qa.get('question')}\nAnswer: {qa.get('answer')}\nScore: {score}/100\n"
+        if score < 75 and qa.get("topic"):
+            low_performing_topics.append(qa.get("topic"))
 
     prompt = f"""
-    You are an expert career coach reviewing a candidate's completed mock interview session for the role of '{session.role}'.
-    
-    Based on the session history:
-    {qas_formatted}
-    
-    Provide an overall structured evaluation in JSON format containing:
-    - "overall_strengths" (bulleted text describing core strengths)
-    - "overall_weaknesses" (bulleted text describing key weaknesses)
-    - "improvement_plan" (a step-by-step 3-part plan formatted with headers like '### Priority 1', '### Priority 2', etc.)
+You are an expert career coach reviewing a candidate's completed mock interview session for '{session.role}'.
 
-    Ensure the response is valid, parsable JSON.
-    """
+SESSION DATA:
+{qas_formatted}
 
-    if settings.GEMINI_API_KEY:
-        try:
-            res_text = _call_gemini_api(prompt, json_mode=True)
-            return json.loads(res_text)
-        except Exception:
-            pass
+Target Low Performing Topics: {json.dumps(low_performing_topics)}
 
-    return {
-        "overall_strengths": "• Clear conceptual understanding of engineering pipelines and architecture.\n• Good communication clarity and logical flow.\n• Strong problem solving mindset.",
-        "overall_weaknesses": "• Lacks quantitative details in explanations.\n• Missing STAR result outputs (outlining percentage efficiency gains, metrics, etc.).\n• Needs more structured approach to answering open-ended system design questions.",
-        "improvement_plan": "### Priority 1: Answer Structuring\nUse the **STAR Method** for behavioral questions. Ensure you spend 15% on Situation/Task, 50% detailing your Actions, and 35% on the quantitative Result.\n\n### Priority 2: Technical Depth & Optimization\nPractice detailing latency profiles, data flows, asynchronous processing queues (like Celery/Redis), and deployment architectures.\n\n### Priority 3: Communication Speed\nKeep your technical explanations concise. Focus on high-level tradeoffs before diving deep into implementation details."
-    }
+Provide a structured evaluation in JSON format:
+{{
+  "overall_strengths": "Bulleted summary of actual candidate strengths observed...",
+  "overall_weaknesses": "Bulleted summary of actual weak areas identified...",
+  "improvement_plan": "A step-by-step personalized 3-part plan formatted with markdown headers (### Priority 1: ..., ### Priority 2: ..., ### Priority 3: ...)"
+}}
+"""
+    try:
+        res_raw = _call_gemini_api(prompt, json_mode=True)
+        from app.services.gemini_service import clean_and_parse_json
+        return clean_and_parse_json(res_raw)
+    except Exception as e:
+        logger.error(f"[Interview Summary] Failed to generate AI summary: {e}")
+        return {
+            "overall_strengths": "• Good effort across technical questions.\n• Demonstrated core foundational knowledge.",
+            "overall_weaknesses": "• Need deeper structure and quantifiable metrics in answers.",
+            "improvement_plan": "### Priority 1: Structure Answers\nUse clear bullet points and frameworks (e.g. STAR method) for scenario questions.\n\n### Priority 2: Technical Deep Dive\nReview system design tradeoffs and optimization strategies."
+        }

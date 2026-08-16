@@ -3,28 +3,17 @@ import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import ResumePreview from '../components/ResumePreview';
 
-// Define the 20 templates configuration
+// Define the 9 graphical UI templates configuration
 const TEMPLATES_CONFIG = [
-  { id: 'Modern', name: 'Modern Style', category: 'Technology', ats: 'ATS Friendly', desc: 'Left accent bar, modern two-column design.' },
-  { id: 'Professional', name: 'Professional Pro', category: 'Business', ats: 'ATS Friendly', desc: 'Classic single column serif typography.' },
-  { id: 'Minimal', name: 'Minimalist Clean', category: 'ATS Friendly', ats: 'ATS Friendly', desc: 'Ultra-clean sans-serif single column design.' },
-  { id: 'ATS Pro', name: 'ATS Premium', category: 'ATS Friendly', ats: 'ATS Friendly', desc: 'Text-only layout optimized for scanning parsers.' },
-  { id: 'Creative', name: 'Creative Designer', category: 'Creative', ats: 'Standard', desc: 'Bold headers with high contrast split layout.' },
-  { id: 'Executive', name: 'Executive Leader', category: 'Business', ats: 'Standard', desc: 'Centered header and formal serif layout.' },
-  { id: 'Tech Stack', name: 'Tech Stack Dev', category: 'Technology', ats: 'ATS Friendly', desc: 'Code monospaced accents, timeline highlights.' },
-  { id: 'Elegant', name: 'Elegant Journal', category: 'Business', ats: 'Standard', desc: 'Emerald accents and detailed project blocks.' },
-  { id: 'Classic', name: 'Classic Scholars', category: 'Academic', ats: 'ATS Friendly', desc: 'Traditional red-accent dense layout.' },
-  { id: 'Compact', name: 'Compact One Page', category: 'ATS Friendly', ats: 'ATS Friendly', desc: 'Tight vertical grids, ideal for short resumes.' },
-  { id: 'Sidebar', name: 'Sidebar Focus', category: 'Creative', ats: 'Standard', desc: 'Bold full-length left colored sidebar column.' },
-  { id: 'Timeline', name: 'Timeline Career', category: 'Experienced', ats: 'ATS Friendly', desc: 'Chronological timeline flow for work history.' },
-  { id: 'Academic', name: 'Academic Scholar', category: 'Academic', ats: 'Standard', desc: 'Formal multi-column publications structure.' },
-  { id: 'Portfolio', name: 'Portfolio Showcase', category: 'Creative', ats: 'Standard', desc: 'Grid block design optimized for project-first views.' },
-  { id: 'Bold', name: 'Bold Impact', category: 'Creative', ats: 'Standard', desc: 'Cyan headers, strong bold highlights throughout.' },
-  { id: 'Clean Grid', name: 'Clean Grid', category: 'Technology', ats: 'ATS Friendly', desc: 'Geometric blocks and clear visual sections.' },
-  { id: 'Startup', name: 'Startup Growth', category: 'Technology', ats: 'ATS Friendly', desc: 'Fast-growing tech style, clean spacing.' },
-  { id: 'Data Scientist', name: 'Data Scientist Pro', category: 'Technology', ats: 'ATS Friendly', desc: 'Structured matrix for skills and algorithms.' },
-  { id: 'Consulting', name: 'Consulting Expert', category: 'Business', ats: 'ATS Friendly', desc: 'High-density achievements-first consulting layout.' },
-  { id: 'One Page Pro', name: 'One Page Pro', category: 'ATS Friendly', ats: 'ATS Friendly', desc: 'Compressed layout for 1-page constraints.' }
+  { id: 'isabel', name: 'Isabel Mercado', category: 'Creative', ats: 'ATS Friendly', desc: 'Minimalist layout with a left section bar and elegant typography.' },
+  { id: 'michael', name: 'Michael Adams', category: 'Creative', ats: 'Standard', desc: 'High-impact layout with a dark left column, circle avatar, and bold name frame.' },
+  { id: 'anaisha', name: 'Anaisha Parvati', category: 'Business', ats: 'ATS Friendly', desc: 'Clean corporate layout with horizontal bordered dividers.' },
+  { id: 'olivia', name: 'Olivia Wilson', category: 'Creative', ats: 'Standard', desc: 'Two-tone layout with a teal sidebar and a warm beige content area.' },
+  { id: 'sebastian', name: 'Sebastian Bennett', category: 'Business', ats: 'ATS Friendly', desc: 'Traditional corporate style with thin dividers and elegant spacing.' },
+  { id: 'adeline', name: 'Adeline Palmerston', category: 'Creative', ats: 'Standard', desc: 'Modern split-column design with a circle photo and diagonal accent header.' },
+  { id: 'donna', name: 'Donna Stroupe', category: 'Creative', ats: 'Standard', desc: 'Sophisticated dark taupe and light beige color-blocked layout.' },
+  { id: 'cahaya', name: 'Cahaya Dewi', category: 'Creative', ats: 'Standard', desc: 'Bold black-and-white theme with high contrast headers and sidebars.' },
+  { id: 'richard', name: 'Richard Sanchez', category: 'Business', ats: 'Standard', desc: 'Professional navy blue sidebar layout with circle photo.' }
 ];
 
 export default function ResumeTemplatesPage() {
@@ -51,9 +40,10 @@ export default function ResumeTemplatesPage() {
   }, []);
 
   const handleUseTemplate = (templateId) => {
+    // Save selected template to local storage
     localStorage.setItem('careerai_template_id', templateId);
-    // Navigate to builder
-    navigate('/resume/builder?step=preview');
+    // Navigate to manual resume builder
+    navigate('/resume/builder');
   };
 
   // Filter & sort logic

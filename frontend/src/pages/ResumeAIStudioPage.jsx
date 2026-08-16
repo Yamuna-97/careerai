@@ -1,822 +1,1471 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import Header from '../components/Header';
-import ResumePreview from '../components/ResumePreview';
+import React, { useState, useEffect, useRef } from "react";
+import { useNavigate, Link } from "react-router-dom";
+
+const API = "/api/v1/resume/ai";
+const getToken = () =>
+  localStorage.getItem("access_token") ||
+  localStorage.getItem("token") ||
+  localStorage.getItem("careerai_token") ||
+  "";
+
+async function apiPost(endpoint, body) {
+  const headers = { "Content-Type": "application/json" };
+  const token = getToken();
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const res = await fetch(`${API}${endpoint}`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.detail || data.message || `API error ${res.status}`);
+  }
+  return data;
+}
+
+function ScoreRing({ score, size = 88, stroke = 8, color = "#EC4899" }) {
+  const r = (size - stroke) / 2;
+  const circ = 2 * Math.PI * r;
+  const dash = (score / 100) * circ;
+  return (
+    <svg width={size} height={size} className="rotate-[-90deg]">
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#f3f4f6" strokeWidth={stroke} />
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={r}
+        fill="none"
+        stroke={color}
+        strokeWidth={stroke}
+        strokeDasharray={`${dash} ${circ}`}
+        strokeLinecap="round"
+        style={{ transition: "stroke-dasharray 1s ease" }}
+      />
+    </svg>
+  );
+}
+
+function ScoreBar({ label, value, color = "#EC4899" }) {
+  return (
+    <div className="space-y-1">
+      <div className="flex justify-between text-[11px] font-semibold">
+        <span className="text-gray-600">{label}</span>
+        <span style={{ color }}>{value}%</span>
+      </div>
+      <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+        <div
+          className="h-full rounded-full transition-all duration-700"
+          style={{ width: `${value}%`, background: color }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function ToolCard({ icon, title, description, features, buttonLabel, accent = "#EC4899", onClick, badge }) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onClick={onClick}
+      className="relative bg-white border border-gray-100 rounded-2xl p-6 cursor-pointer transition-all duration-200 hover:shadow-xl hover:-translate-y-0.5 hover:border-pink-100"
+      style={{ boxShadow: hovered ? `0 8px 32px ${accent}18` : undefined }}
+    >
+      {badge && (
+        <span
+          className="absolute top-4 right-4 text-[10px] font-black px-2 py-0.5 rounded-full text-white"
+          style={{ background: accent }}
+        >
+          {badge}
+        </span>
+      )}
+      <div className="w-11 h-11 rounded-xl flex items-center justify-center mb-4" style={{ background: `${accent}15` }}>
+        <span className="material-symbols-outlined text-xl" style={{ color: accent }}>
+          {icon}
+        </span>
+      </div>
+      <h3 className="text-[15px] font-bold text-gray-900 mb-1.5">{title}</h3>
+      <p className="text-[12px] text-gray-500 leading-relaxed mb-4">{description}</p>
+      {features && (
+        <ul className="space-y-1 mb-5">
+          {features.map((f, i) => (
+            <li key={i} className="flex items-center gap-2 text-[11px] text-gray-500">
+              <span className="w-1 h-1 rounded-full flex-shrink-0" style={{ background: accent }} />
+              {f}
+            </li>
+          ))}
+        </ul>
+      )}
+      <button
+        className="w-full py-2 rounded-xl text-[12px] font-bold text-white transition-opacity hover:opacity-90"
+        style={{ background: `linear-gradient(135deg, ${accent}, ${accent}cc)` }}
+      >
+        {buttonLabel}
+      </button>
+    </div>
+  );
+}
+
+function LoadingState({ steps, currentStep }) {
+  return (
+    <div className="flex flex-col items-center py-16 gap-6">
+      <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#EC4899] to-[#FF8A3D] flex items-center justify-center shadow-lg">
+        <span className="material-symbols-outlined text-white text-3xl animate-spin" style={{ animationDuration: "2s" }}>
+          auto_awesome
+        </span>
+      </div>
+      <div className="text-center">
+        <p className="font-bold text-gray-800 text-lg mb-1">AI is working on your request...</p>
+        <p className="text-gray-500 text-sm">{steps[currentStep] || "Processing with Gemini..."}</p>
+      </div>
+      <div className="w-full max-w-sm space-y-2">
+        {steps.map((step, i) => (
+          <div key={i} className="flex items-center gap-3 text-sm">
+            <div
+              className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${
+                i < currentStep
+                  ? "bg-green-500"
+                  : i === currentStep
+                  ? "bg-[#EC4899] animate-pulse"
+                  : "bg-gray-200"
+              }`}
+            >
+              {i < currentStep ? (
+                <span className="material-symbols-outlined text-white" style={{ fontSize: 12 }}>
+                  check
+                </span>
+              ) : i === currentStep ? (
+                <span className="w-2 h-2 bg-white rounded-full block" />
+              ) : null}
+            </div>
+            <span className={i <= currentStep ? "text-gray-800 font-medium" : "text-gray-400"}>{step}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function ResumeAIStudioPage() {
   const navigate = useNavigate();
-
-  // Navigation / Wizard State
-  // 'LANDING' | 'INPUT_METHOD' | 'EXTRACTING' | 'REVIEW' | 'CONFIGURE' | 'GENERATING' | 'WORKSPACE'
-  const [viewState, setViewState] = useState('LANDING');
-  
-  // Creation Flow States
-  const [inputMethod, setInputMethod] = useState('paste'); // 'paste' | 'upload' | 'use_existing'
-  const [pastedDetails, setPastedDetails] = useState('');
-  const [uploadedFile, setUploadedFile] = useState(null);
-  
-  // Extracted/Parsed Data
-  const [resumeData, setResumeData] = useState({
-    personal: { fullName: '', title: '', email: '', phone: '', location: '', linkedin: '', github: '', portfolio: '', profileImage: '' },
-    summary: '',
-    education: [],
-    experience: [],
-    projects: [],
-    skills: [],
-    certifications: [],
-    achievements: []
-  });
-
-  // Target Parameters for optimization
-  const [targetRole, setTargetRole] = useState('Python Developer');
-  const [jobDescription, setJobDescription] = useState('');
-  const [tone, setTone] = useState('Professional');
-  
-  // Scoring Indicators
-  const [scores, setScores] = useState({
-    overall: 82, ats: 78, content: 80, impact: 75, readability: 85, professionalism: 80
-  });
-  const [suggestions, setSuggestions] = useState([]);
-  
-  // Chat Editing
-  const [chatMessages, setChatMessages] = useState([
-    { role: 'assistant', content: 'Hello! I am your AI Resume Coach. I have generated your refined resume structure. Ask me to make edits, optimize summaries, or tailor sections below.' }
-  ]);
-  const [userInputMessage, setUserInputMessage] = useState('');
-  const [selectedSection, setSelectedSection] = useState('All');
-  const [isSendingMessage, setIsSendingMessage] = useState(false);
-
-  // Version Control
-  const [versions, setVersions] = useState([]);
-  const [originalResumeData, setOriginalResumeData] = useState(null);
-  const [showComparison, setShowComparison] = useState(false);
-  const [activeTab, setActiveTab] = useState('chat'); // 'chat' | 'ats' | 'versions'
-
-  // Ref details
   const fileInputRef = useRef(null);
+  const [activeTool, setActiveTool] = useState(null);
+  const [resumeData, setResumeData] = useState(null);
+  const [resumeName, setResumeName] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [loadingStep, setLoadingStep] = useState(0);
+  const [loadingSteps, setLoadingSteps] = useState([]);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState("");
+  const [jobDescription, setJobDescription] = useState("");
+  const [targetRole, setTargetRole] = useState("Software Engineer");
+  const [bulletInput, setBulletInput] = useState("");
+  const [bulletMode, setBulletMode] = useState("professional");
+  const [tailoredResume, setTailoredResume] = useState(null);
 
-  // Load initial scores / suggestion stubs on render
-  useEffect(() => {
-    // Check if we already have resume data to populate in the "Use my existing resume" flow
-    const saved = localStorage.getItem('careerai_resume_data');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        setOriginalResumeData(parsed);
-      } catch (e) {
-        console.error(e);
-      }
+  // Chat Drawer State
+  const [showChat, setShowChat] = useState(false);
+  const [chatMessages, setChatMessages] = useState([
+    {
+      role: "assistant",
+      content: "Hello! I am your AI Resume Assistant. Ask me anything about your active resume, ATS optimization, or missing skills!",
+    },
+  ]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+
+  const [recentActivity, setRecentActivity] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("careerai_ai_activity") || "[]");
+    } catch {
+      return [];
     }
+  });
 
-    // Load static templates/suggestions
-    setSuggestions([
-      { id: '1', section: 'summary', priority: 'high', issue: 'Summary is too general', suggestion: 'Incorporate target keywords matching your target position.', fix_prompt: 'Make summary more technical with key frameworks' },
-      { id: '2', section: 'experience', priority: 'high', issue: 'Experience bullets lack metrics', suggestion: 'Quantify outcomes (e.g. latency reductions, scale values).', fix_prompt: 'Rewrite experience bullet points using quantitative results' },
-      { id: '3', section: 'projects', priority: 'medium', issue: 'Technical stack not explicit', suggestion: 'Incorporate precise technologies inside your description blocks.', fix_prompt: 'Append tech stack chips to project summaries' }
-    ]);
+  const [savedResumesList, setSavedResumesList] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("careerai_saved_resumes") || "[]");
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    try {
+      setSavedResumesList(JSON.parse(localStorage.getItem("careerai_saved_resumes") || "[]"));
+    } catch {}
   }, []);
 
-  // Trigger file selection
-  const handleFileChange = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      setUploadedFile(e.target.files[0]);
+  const saveActivity = (type, detail, extra = {}) => {
+    const entry = { id: Date.now(), type, detail, extra, createdAt: new Date().toISOString() };
+    setRecentActivity((prev) => {
+      const u = [entry, ...prev].slice(0, 8);
+      localStorage.setItem("careerai_ai_activity", JSON.stringify(u));
+      return u;
+    });
+  };
+
+  const simulateLoading = async (steps) => {
+    setLoadingSteps(steps);
+    setLoadingStep(0);
+    for (let i = 0; i < steps.length; i++) {
+      await new Promise((r) => setTimeout(r, 600 + Math.random() * 300));
+      setLoadingStep(i + 1);
     }
   };
 
-  // Call Extraction endpoint
-  const handleStartExtraction = async () => {
-    setViewState('EXTRACTING');
-    
-    // Simulate fallback to mock if API/file parsing fails or no key
+  const handleFileUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setError("");
+    setResult(null);
+    setActiveTool(null);
     try {
-      if (inputMethod === 'use_existing') {
-        // Direct populate
-        setResumeData(originalResumeData || resumeData);
-        setTimeout(() => setViewState('REVIEW'), 1500);
-        return;
-      }
+      const fd = new FormData();
+      fd.append("file", file);
+      const headers = {};
+      const token = getToken();
+      if (token) headers["Authorization"] = `Bearer ${token}`;
 
-      const token = localStorage.getItem('token');
-      let res;
-      
-      if (inputMethod === 'upload' && uploadedFile) {
-        const formData = new FormData();
-        formData.append('file', uploadedFile);
-        
-        res = await fetch('http://localhost:8000/api/v1/resume/ai/upload', {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}` },
-          body: formData
-        });
+      const res = await fetch(`${API}/upload`, { method: "POST", headers, body: fd });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.detail || data.message || "Could not process file upload.");
+      }
+      if (data.resume_data) {
+        setResumeData(data.resume_data);
+        setResumeName(data.resume_data.personal?.fullName || file.name);
+        sessionStorage.setItem("careerai_ai_session", JSON.stringify(data.resume_data));
       } else {
-        // Paste flow
-        res = await fetch('http://localhost:8000/api/v1/resume/ai/extract', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({ text: pastedDetails })
-        });
+        setError(data.message || "Could not extract resume data from file.");
       }
-
-      if (res && res.ok) {
-        const data = await res.json();
-        if (data.success && data.resume_data) {
-          setResumeData(data.resume_data);
-          setViewState('REVIEW');
-          return;
-        }
-      }
-      
-      // Fallback fallback stubs
-      setTimeout(() => {
-        setResumeData(originalResumeData || {
-          personal: { fullName: 'Yamuna', title: 'Machine Learning Engineer', email: 'yamuna@example.com', phone: '+91 98765 43210', location: 'Chennai', linkedin: 'linkedin.com/in/yamuna', github: 'github.com/yamuna-97', portfolio: 'yamuna.dev' },
-          summary: 'Passionate Machine Learning Engineer experienced in predictive modeling and analytics.',
-          education: [{ id: '1', institution: 'Kongu Engineering College', degree: 'B.Tech', fieldOfStudy: 'Artificial Intelligence', startDate: '2024', endDate: '2028', grade: '8.65 CGPA', description: 'Deep learning focus' }],
-          experience: [{ id: '1', company: 'TechVision AI', position: 'Machine Learning Intern', location: 'Chennai', startDate: 'May 2026', endDate: 'Present', currentlyWorking: true, description: 'Developed video analytics model pipelines.' }],
-          projects: [{ id: '1', name: 'CareerAI Platform', description: 'AI-driven career simulator.', technologies: 'React, FastAPI, Supabase', githubUrl: 'github.com/yamuna/careerai', startDate: 'June 2026', endDate: 'August 2026' }],
-          skills: [{ id: '1', name: 'Python', category: 'Programming Languages' }, { id: '2', name: 'FastAPI', category: 'Frameworks' }],
-          certifications: [{ id: '1', name: 'Deep Learning Specialization', issuer: 'DeepLearning.AI', issueDate: 'July 2025' }],
-          achievements: [{ id: '1', title: 'First Place SIH', organization: 'MHRD', date: 'Dec 2025' }]
-        });
-        setViewState('REVIEW');
-      }, 2000);
-
-    } catch (e) {
-      console.error(e);
-      setViewState('REVIEW');
-    }
-  };
-
-  // Generate Polished Resume
-  const handleGenerateResume = async () => {
-    setViewState('GENERATING');
-    
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch('http://localhost:8000/api/v1/resume/ai/generate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          resume_data: resumeData,
-          target_role: targetRole,
-          job_description: jobDescription,
-          tone
-        })
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.resume_data) {
-          setResumeData(data.resume_data);
-          // Set version 1
-          setVersions([{ label: 'Original Extracted', resumeData: resumeData }, { label: 'AI Polished', resumeData: data.resume_data }]);
-        }
-      }
-    } catch (e) {
-      console.error(e);
+    } catch (err) {
+      setError(err.message || "Upload failed. Please try again.");
     } finally {
-      setTimeout(() => setViewState('WORKSPACE'), 2000);
+      setUploading(false);
     }
   };
 
-  // Send Chat message editing instruction
-  const handleSendMessage = async () => {
-    if (!userInputMessage.trim() || isSendingMessage) return;
+  const handleImportSaved = (entry) => {
+    const d = entry.data;
+    const converted = {
+      personal: {
+        fullName: `${d.firstName || ""} ${d.lastName || ""}`.trim(),
+        title: d.title || "",
+        email: d.email || "",
+        phone: d.phone || "",
+        location: d.location || "",
+        linkedin: d.linkedin || "",
+        github: "",
+        portfolio: "",
+        profileImage: "",
+      },
+      summary: d.summary || "",
+      experience: (d.experiences || []).map((e, i) => ({
+        id: String(i + 1),
+        company: e.company || "",
+        position: e.role || "",
+        location: e.location || "",
+        startDate: e.period?.split(" - ")[0] || "",
+        endDate: e.period?.split(" - ")[1] || "",
+        description: (e.bullets || []).join("\n"),
+      })),
+      education: d.education
+        ? [
+            {
+              id: "1",
+              institution: d.education.school || "",
+              degree: d.education.degree || "",
+              fieldOfStudy: "",
+              startDate: d.education.period?.split(" - ")[0] || "",
+              endDate: d.education.period?.split(" - ")[1] || "",
+            },
+          ]
+        : [],
+      skills: Object.values(d.skills || {})
+        .flatMap((v, ci) =>
+          v.split(",").map((s, i) => ({ id: String(ci * 20 + i), name: s.trim(), category: "Other" }))
+        )
+        .filter((s) => s.name),
+      projects: [],
+      certifications: [],
+      achievements: [],
+    };
+    setResumeData(converted);
+    setResumeName(`${d.firstName || "My"} ${d.lastName || "Resume"} · ${entry.template}`);
+    setResult(null);
+    setActiveTool(null);
+    sessionStorage.setItem("careerai_ai_session", JSON.stringify(converted));
+  };
 
-    const userMsg = userInputMessage;
-    setChatMessages(prev => [...prev, { role: 'user', content: userMsg }]);
-    setUserInputMessage('');
-    setIsSendingMessage(true);
+  const handleClearResume = () => {
+    setResumeData(null);
+    setResumeName("");
+    setResult(null);
+    setActiveTool(null);
+    sessionStorage.removeItem("careerai_ai_session");
+  };
+
+  const runTool = async (toolId, steps, endpoint, body, extraFn) => {
+    setActiveTool(toolId);
+    setLoading(true);
+    setResult(null);
+    setError("");
+    await simulateLoading(steps);
+    try {
+      const data = await apiPost(endpoint, body);
+      if (extraFn) extraFn(data);
+      setResult({ tool: toolId, data });
+    } catch (err) {
+      setError(err.message || "AI operation failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const runAnalyze = () =>
+    runTool(
+      "analyze",
+      [
+        "Parsing resume structure",
+        "Evaluating content & summary impact",
+        "Checking experience bullet strength",
+        "Identifying strengths & weaknesses",
+        "Formulating tailored recommendations",
+      ],
+      "/analyze-resume",
+      { resume_data: resumeData },
+      (d) => saveActivity("Resume Analysis", resumeName, { score: d.overall_score })
+    );
+
+  const runATS = () =>
+    runTool(
+      "ats",
+      [
+        "Parsing section headings",
+        "Calculating keyword density",
+        "Checking readability & formatting",
+        "Estimating ATS score",
+      ],
+      "/ats-analysis",
+      { resume_data: resumeData, job_description: jobDescription },
+      (d) => saveActivity("ATS Score", resumeName, { score: d.ats_score })
+    );
+
+  const runImprove = () =>
+    runTool(
+      "improve",
+      [
+        "Analyzing text clarity & grammar",
+        "Strengthening action verbs",
+        "Refining sentence structure",
+        "Finalizing proofread version",
+      ],
+      "/improve-resume",
+      { resume_data: resumeData },
+      () => saveActivity("Resume Improved", resumeName, {})
+    );
+
+  const runJobMatch = () =>
+    runTool(
+      "match",
+      [
+        "Parsing target job description",
+        "Comparing existing vs missing skills",
+        "Analyzing keyword overlap",
+        "Calculating match scores",
+      ],
+      "/job-match",
+      { resume_data: resumeData, job_description: jobDescription },
+      (d) => saveActivity("Job Match", "Job Description", { score: d.overall_match })
+    );
+
+  const runTailor = () =>
+    runTool(
+      "tailor",
+      [
+        "Analyzing target JD requirements",
+        "Rewriting summary for target role",
+        "Prioritizing relevant skills",
+        "Optimizing bullet phrasing",
+        "Generating side-by-side diff",
+      ],
+      "/tailor-resume",
+      { resume_data: resumeData, job_description: jobDescription },
+      (d) => {
+        setTailoredResume(d.tailored_resume);
+        saveActivity("Resume Tailored", "Job Description", {});
+      }
+    );
+
+  const runSkills = () =>
+    runTool(
+      "skills",
+      [
+        "Extracting current skills",
+        "Comparing with target role benchmarks",
+        "Categorizing skills gap",
+        "Generating skill recommendations",
+      ],
+      "/skills-recommendations",
+      { resume_data: resumeData, target_role: targetRole, job_description: jobDescription },
+      () => saveActivity("Skills Analysis", targetRole || "Target Role", {})
+    );
+
+  const runBullet = () =>
+    runTool(
+      "bullet",
+      [
+        "Analyzing bullet structure",
+        "Generating Professional, ATS, Technical, Achievement, & Concise versions",
+        "Ensuring factual safety",
+      ],
+      "/improve-bullet",
+      { bullet: bulletInput, mode: bulletMode },
+      () => saveActivity("Bullet Improved", bulletInput.substring(0, 40), {})
+    );
+
+  const runGenerate = () =>
+    runTool(
+      "generate",
+      [
+        "Reading user profile inputs",
+        "Crafting targeted professional summary",
+        "Structuring experience & skills",
+        "Building resume payload",
+      ],
+      "/generate-resume",
+      { resume_data: resumeData, target_role: targetRole, user_profile: resumeData },
+      () => saveActivity("Resume Generated", targetRole || "New Resume", {})
+    );
+
+  const handleSendChatMessage = async () => {
+    if (!chatInput.trim() || chatLoading) return;
+    const userMsg = chatInput.trim();
+    setChatInput("");
+    const newHistory = [...chatMessages, { role: "user", content: userMsg }];
+    setChatMessages(newHistory);
+    setChatLoading(true);
 
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch('http://localhost:8000/api/v1/resume/ai/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          message: userMsg,
-          resume_data: resumeData,
-          chat_history: chatMessages.slice(-6),
-          selected_section: selectedSection === 'All' ? null : selectedSection.toLowerCase()
-        })
+      const data = await apiPost("/chat", {
+        message: userMsg,
+        resume_data: resumeData || {},
+        chat_history: newHistory,
       });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success) {
-          setResumeData(data.updated_resume);
-          setChatMessages(prev => [...prev, { role: 'assistant', content: data.ai_response }]);
-          // Save new version
-          setVersions(prev => [...prev, { label: userMsg, resumeData: data.updated_resume }]);
-          
-          // Re-score
-          const scoreRes = await fetch('http://localhost:8000/api/v1/resume/ai/score', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({ resume_data: data.updated_resume, target_role: targetRole })
-          });
-          if (scoreRes.ok) {
-            const scoreData = await scoreRes.json();
-            setScores(scoreData);
-          }
-        }
-      } else {
-        // Local simulation fallback
-        setTimeout(() => {
-          let updated = { ...resumeData };
-          if (userMsg.toLowerCase().includes('summary') || userMsg.toLowerCase().includes('short')) {
-            updated.summary = 'Passionate Machine Learning Engineer specializing in computer vision, FastAPI APIs, and crop disease analytics.';
-          }
-          setResumeData(updated);
-          setChatMessages(prev => [...prev, { role: 'assistant', content: `Done. I adjusted your resume based on "${userMsg}".` }]);
-          setVersions(prev => [...prev, { label: userMsg, resumeData: updated }]);
-          setIsSendingMessage(false);
-        }, 1000);
-        return;
-      }
-    } catch (e) {
-      console.error(e);
+      setChatMessages([
+        ...newHistory,
+        {
+          role: "assistant",
+          content: data.reply || "I have analyzed your request.",
+          followups: data.suggested_followups || [],
+        },
+      ]);
+    } catch (err) {
+      setChatMessages([
+        ...newHistory,
+        { role: "assistant", content: `Sorry, I ran into an issue: ${err.message}` },
+      ]);
     } finally {
-      setIsSendingMessage(false);
+      setChatLoading(false);
     }
   };
 
-  // Apply final data back to Manual Builder
-  const handleApplyToBuilder = () => {
-    localStorage.setItem('careerai_resume_data', JSON.stringify(resumeData));
-    navigate('/resume/builder');
+  const TOOLS = [
+    {
+      id: "analyze",
+      icon: "analytics",
+      title: "Analyze Resume",
+      accent: "#EC4899",
+      description: "In-depth AI analysis of content quality, structure, strengths, weaknesses, and section scores.",
+      features: ["Overall quality grade", "Section completeness", "Grammar & impact", "Actionable recommendations"],
+      buttonLabel: "Analyze Resume",
+      badge: "Gemini Pro",
+      onClick: () => {
+        if (resumeData) runAnalyze();
+      },
+    },
+    {
+      id: "ats",
+      icon: "bar_chart",
+      title: "ATS Score Analyzer",
+      accent: "#0EA5E9",
+      description: "Estimate ATS compatibility score, section structure, keyword density, and formatting issues.",
+      features: ["AI-based ATS estimate", "Keyword optimization", "Readability rating", "Issue breakdown"],
+      buttonLabel: "Check ATS Score",
+      badge: "Gemini Flash",
+      onClick: () => {
+        if (resumeData) runATS();
+      },
+    },
+    {
+      id: "match",
+      icon: "target",
+      title: "Match Job Description",
+      accent: "#3B82F6",
+      description: "Compare your resume against a target job description and identify matching vs missing skills.",
+      features: ["Overall match score", "Existing vs missing skills", "Keyword overlap", "Recommended keywords"],
+      buttonLabel: "Analyze Job Match",
+      badge: "Gemini Flash",
+      onClick: () => setActiveTool("match-input"),
+    },
+    {
+      id: "tailor",
+      icon: "tune",
+      title: "Tailor Resume",
+      accent: "#F59E0B",
+      description: "Generate a targeted version of your resume aligned with the job description without fabricating facts.",
+      features: ["Role-specific summary", "Prioritized skills", "Side-by-side comparison", "Review before applying"],
+      buttonLabel: "Tailor Resume",
+      badge: "Gemini Pro",
+      onClick: () => setActiveTool("tailor-input"),
+    },
+    {
+      id: "generate",
+      icon: "psychology",
+      title: "Generate Resume",
+      accent: "#10B981",
+      description: "Create a complete, role-targeted resume from your profile details for any engineering or data role.",
+      features: ["Target role selection", "Full resume generation", "Structured JSON output", "One-click export"],
+      buttonLabel: "Generate Resume",
+      badge: "Gemini Pro",
+      onClick: () => setActiveTool("generate-input"),
+    },
+    {
+      id: "skills",
+      icon: "lightbulb",
+      title: "Skills Recommendations",
+      accent: "#F97316",
+      description: "Categorize your skills into Already Have, Missing, and Recommended for career progression.",
+      features: ["Already Have skills", "Missing required skills", "Recommended complimentary skills", "Priority list"],
+      buttonLabel: "Analyze Skills",
+      badge: "Gemini Flash",
+      onClick: () => {
+        if (resumeData) runSkills();
+      },
+    },
+    {
+      id: "bullet",
+      icon: "edit_note",
+      title: "Improve Bullet Points",
+      accent: "#6366F1",
+      description: "Generate 5 improved versions (Professional, ATS, Technical, Achievement-Focused, Concise) of any bullet point.",
+      features: ["5 unique versions", "Action verb emphasis", "No fabricated metrics", "One-click copy"],
+      buttonLabel: "Improve a Bullet",
+      badge: "Gemini Flash",
+      onClick: () => setActiveTool("bullet-input"),
+    },
+    {
+      id: "improve",
+      icon: "auto_awesome",
+      title: "Improve Resume",
+      accent: "#8B5CF6",
+      description: "Fix grammar, spelling, and sentence phrasing while preserving all factual data.",
+      features: ["Grammar & spelling fix", "Clarity enhancement", "Review suggested diffs", "Safe apply"],
+      buttonLabel: "Improve Resume",
+      badge: "Gemini Flash",
+      onClick: () => {
+        if (resumeData) runImprove();
+      },
+    },
+  ];
+
+  const accentFor = (id) => TOOLS.find((t) => t.id === id)?.accent || "#EC4899";
+  const isToolInput = ["match-input", "tailor-input", "bullet-input", "generate-input"].includes(activeTool);
+
+  const renderToolInput = () => {
+    const inputClass = "w-full border border-gray-200 rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2";
+    if (activeTool === "match-input")
+      return (
+        <ToolInputPanel
+          title="Match Job Description"
+          icon="target"
+          accent="#3B82F6"
+          onBack={() => setActiveTool(null)}
+          onRun={runJobMatch}
+          runLabel="Analyze Job Match"
+          canRun={!!jobDescription.trim() && !!resumeData}
+        >
+          <label className="text-[12px] font-bold text-gray-700 mb-1.5 block">Paste Target Job Description</label>
+          <textarea
+            value={jobDescription}
+            onChange={(e) => setJobDescription(e.target.value)}
+            rows={10}
+            placeholder="Paste full job description here..."
+            className={`${inputClass} focus:ring-blue-200`}
+          />
+        </ToolInputPanel>
+      );
+    if (activeTool === "tailor-input")
+      return (
+        <ToolInputPanel
+          title="Tailor Resume"
+          icon="tune"
+          accent="#F59E0B"
+          onBack={() => setActiveTool(null)}
+          onRun={runTailor}
+          runLabel="Tailor My Resume"
+          canRun={!!jobDescription.trim() && !!resumeData}
+        >
+          <label className="text-[12px] font-bold text-gray-700 mb-1.5 block">Paste Target Job Description</label>
+          <textarea
+            value={jobDescription}
+            onChange={(e) => setJobDescription(e.target.value)}
+            rows={10}
+            placeholder="Paste full job description here..."
+            className={`${inputClass} focus:ring-amber-200`}
+          />
+        </ToolInputPanel>
+      );
+    if (activeTool === "bullet-input")
+      return (
+        <ToolInputPanel
+          title="Improve Bullet Points"
+          icon="edit_note"
+          accent="#6366F1"
+          onBack={() => setActiveTool(null)}
+          onRun={runBullet}
+          runLabel="Improve Bullet Point"
+          canRun={!!bulletInput.trim()}
+        >
+          <label className="text-[12px] font-bold text-gray-700 mb-1.5 block">Original Bullet Point</label>
+          <textarea
+            value={bulletInput}
+            onChange={(e) => setBulletInput(e.target.value)}
+            rows={3}
+            placeholder="e.g. Worked on an internship management system."
+            className={`${inputClass} focus:ring-indigo-200 mb-4`}
+          />
+        </ToolInputPanel>
+      );
+    if (activeTool === "generate-input")
+      return (
+        <ToolInputPanel
+          title="Generate Resume"
+          icon="psychology"
+          accent="#10B981"
+          onBack={() => setActiveTool(null)}
+          onRun={runGenerate}
+          runLabel="Generate Resume"
+          canRun={!!resumeData}
+        >
+          <label className="text-[12px] font-bold text-gray-700 mb-1.5 block">Select Target Role</label>
+          <input
+            value={targetRole}
+            onChange={(e) => setTargetRole(e.target.value)}
+            placeholder="e.g. Software Engineer, Frontend Developer..."
+            className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 mb-4"
+          />
+          <div className="flex flex-wrap gap-2">
+            {[
+              "Software Engineer",
+              "Frontend Developer",
+              "Backend Developer",
+              "AI/ML Engineer",
+              "Data Scientist",
+              "Data Analyst",
+              "Full Stack Developer",
+            ].map((r) => (
+              <button
+                key={r}
+                onClick={() => setTargetRole(r)}
+                className={`px-3 py-1.5 rounded-full text-[11px] font-semibold border transition-all ${
+                  targetRole === r ? "bg-emerald-600 text-white border-emerald-600" : "border-gray-200 text-gray-600"
+                }`}
+              >
+                {r}
+              </button>
+            ))}
+          </div>
+        </ToolInputPanel>
+      );
+    return null;
   };
 
-  // Restore previous version
-  const handleRestoreVersion = (ver) => {
-    setResumeData(ver.resumeData);
-    setChatMessages(prev => [...prev, { role: 'assistant', content: `Restored version: "${ver.label}".` }]);
+  const renderResult = () => {
+    if (!result) return null;
+    const { tool, data } = result;
+    const accent = accentFor(tool);
+    if (tool === "analyze") return <AnalyzeResult data={data} accent={accent} />;
+    if (tool === "ats") return <ATSResult data={data} accent={accent} onFix={runImprove} />;
+    if (tool === "improve")
+      return (
+        <ImproveResult
+          data={data}
+          onApply={() => {
+            if (data.improved_resume_data) {
+              setResumeData(data.improved_resume_data);
+              sessionStorage.setItem("careerai_ai_session", JSON.stringify(data.improved_resume_data));
+            }
+            setResult(null);
+            setActiveTool(null);
+          }}
+        />
+      );
+    if (tool === "match") return <JobMatchResult data={data} accent={accent} />;
+    if (tool === "tailor")
+      return (
+        <TailorResult
+          data={data}
+          tailored={tailoredResume}
+          original={resumeData}
+          onApply={() => {
+            if (tailoredResume) {
+              setResumeData(tailoredResume);
+              sessionStorage.setItem("careerai_ai_session", JSON.stringify(tailoredResume));
+            }
+            setResult(null);
+            setActiveTool(null);
+          }}
+        />
+      );
+    if (tool === "skills") return <SkillsResult data={data} />;
+    if (tool === "bullet") return <BulletResult data={data} accent={accent} />;
+    if (tool === "generate")
+      return (
+        <GenerateResult
+          data={data}
+          onApply={() => {
+            if (data.resume_data) {
+              setResumeData(data.resume_data);
+              sessionStorage.setItem("careerai_ai_session", JSON.stringify(data.resume_data));
+            }
+            navigate("/resume/builder");
+          }}
+        />
+      );
+    return null;
   };
 
   return (
-    <div className="flex-1 w-full relative pb-20 md:pb-8">
+    <div className="flex-1 flex flex-col min-h-[calc(100vh-4rem)] bg-gray-50 relative">
+      <input ref={fileInputRef} type="file" accept=".pdf,.docx,.doc,.txt" onChange={handleFileUpload} className="hidden" />
 
-
-        {/* ── LANDING VIEW ── */}
-        {viewState === 'LANDING' && (
-          <main className="flex-grow px-margin-mobile md:px-margin-desktop py-stack-lg max-w-[1000px] mx-auto w-full flex flex-col gap-6">
-            
-            <div className="text-center py-6">
-              <h2 className="font-headline-lg text-headline-lg font-extrabold text-on-surface">
-                Create, Improve & Tailor Your Resume
-              </h2>
-              <p className="text-on-surface-variant font-body-md mt-2 max-w-xl mx-auto">
-                Upload your files or paste details to extract structured elements. Use interactive chat instructions to refine wording.
+      {/* Header */}
+      <div className="bg-white border-b border-gray-100 px-6 lg:px-10 py-5 sticky top-0 z-10">
+        <div className="max-w-6xl mx-auto flex flex-col gap-4">
+          <div className="flex items-start justify-between flex-wrap gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#EC4899] to-[#FF8A3D] flex items-center justify-center">
+                  <span className="material-symbols-outlined text-white text-sm">auto_awesome</span>
+                </div>
+                <h1 className="text-xl font-black text-gray-900">AI Studio</h1>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-pink-100 text-pink-700">
+                  Google Gemini Powered
+                </span>
+              </div>
+              <p className="text-sm text-gray-500">
+                Model-routed intelligence for resume parsing, analysis, ATS optimization, and tailoring.
               </p>
+              {resumeData ? (
+                <div className="flex items-center gap-2 mt-2 flex-wrap">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
+                  <span className="text-[11px] text-gray-500 font-medium">
+                    Working on: <span className="text-gray-800 font-bold">{resumeName || "My Resume"}</span>
+                  </span>
+                  <button
+                    onClick={handleClearResume}
+                    className="flex items-center gap-0.5 text-[10px] text-gray-400 hover:text-red-500 transition-colors ml-1 font-semibold"
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: 12 }}>
+                      close
+                    </span>
+                    Change
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 mt-2">
+                  <span className="w-2 h-2 rounded-full bg-amber-400" />
+                  <span className="text-[11px] text-amber-700 font-medium">
+                    No resume selected — Upload or select a resume to get started.
+                  </span>
+                </div>
+              )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
-              
-              {/* Create with AI */}
-              <div className="bg-surface border border-outline-variant/40 rounded-2xl p-6 shadow-sm flex flex-col justify-between hover:border-primary/40 transition-colors">
-                <div className="space-y-4">
-                  <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
-                    <span className="material-symbols-outlined text-2xl icon-filled">auto_awesome</span>
-                  </div>
-                  <div>
-                    <h3 className="font-headline-sm text-headline-sm font-bold text-on-surface">Create With AI</h3>
-                    <p className="text-xs text-on-surface-variant mt-2 leading-relaxed">
-                      Start fresh by uploading your details, pasting raw text, or pulling existing profiles. AI structures your sections instantly.
-                    </p>
-                  </div>
-                </div>
+            <div className="flex items-center gap-2">
+              {resumeData && (
                 <button
-                  onClick={() => { setViewState('INPUT_METHOD'); setInputMethod('paste'); }}
-                  className="w-full mt-6 bg-primary text-on-primary py-2.5 rounded-lg font-label-md text-xs font-bold hover:opacity-90 transition-opacity cursor-pointer"
+                  onClick={() => setShowChat(!showChat)}
+                  className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:opacity-90 shadow-sm"
                 >
-                  Create Resume with AI
+                  <span className="material-symbols-outlined text-sm">chat</span>
+                  AI Assistant
                 </button>
-              </div>
-
-              {/* Improve Existing */}
-              <div className="bg-surface border border-outline-variant/40 rounded-2xl p-6 shadow-sm flex flex-col justify-between hover:border-secondary/40 transition-colors">
-                <div className="space-y-4">
-                  <div className="w-12 h-12 rounded-xl bg-secondary/10 flex items-center justify-center text-secondary">
-                    <span className="material-symbols-outlined text-2xl icon-filled">upload_file</span>
-                  </div>
-                  <div>
-                    <h3 className="font-headline-sm text-headline-sm font-bold text-on-surface">Improve Existing Resume</h3>
-                    <p className="text-xs text-on-surface-variant mt-2 leading-relaxed">
-                      Upload an existing PDF/DOCX file. Gemini extracts content, structures columns, and enhances grammar without fabrications.
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => { setViewState('INPUT_METHOD'); setInputMethod('upload'); }}
-                  className="w-full mt-6 bg-secondary text-white py-2.5 rounded-lg font-label-md text-xs font-bold hover:opacity-90 transition-opacity cursor-pointer"
-                >
-                  Upload Existing Resume
-                </button>
-              </div>
-
+              )}
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="flex items-center gap-2 bg-[#EC4899] text-white px-4 py-2 rounded-xl text-sm font-semibold hover:opacity-90 shadow-sm shadow-pink-200"
+              >
+                <span className="material-symbols-outlined text-sm">{uploading ? "hourglass_empty" : "upload_file"}</span>
+                {uploading ? "Uploading..." : "Upload Resume"}
+              </button>
             </div>
+          </div>
+        </div>
+      </div>
 
-            {/* Scorecard indicators */}
-            <div className="bg-surface rounded-xl border border-outline-variant/30 p-6 mt-6 shadow-sm space-y-4">
-              <h4 className="font-label-md text-xs font-bold text-on-surface-variant uppercase tracking-wider">
-                Last Scoring Assessment Metrics
-              </h4>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
-                <div className="bg-surface-container-low p-3 rounded-lg border border-outline-variant/15">
-                  <span className="text-2xl font-bold text-primary">87</span>
-                  <p className="text-[10px] text-on-surface-variant mt-0.5">Content Quality</p>
-                </div>
-                <div className="bg-surface-container-low p-3 rounded-lg border border-outline-variant/15">
-                  <span className="text-2xl font-bold text-secondary">82</span>
-                  <p className="text-[10px] text-on-surface-variant mt-0.5">ATS Score</p>
-                </div>
-                <div className="bg-surface-container-low p-3 rounded-lg border border-outline-variant/15">
-                  <span className="text-2xl font-bold text-indigo-500">93</span>
-                  <p className="text-[10px] text-on-surface-variant mt-0.5">Readability</p>
-                </div>
-                <div className="bg-surface-container-low p-3 rounded-lg border border-outline-variant/15">
-                  <span className="text-2xl font-bold text-teal-500">79</span>
-                  <p className="text-[10px] text-on-surface-variant mt-0.5">Keyword Match</p>
-                </div>
-              </div>
-            </div>
-
-          </main>
+      {/* Main Content */}
+      <div className="flex-1 px-6 lg:px-10 py-8 max-w-6xl mx-auto w-full">
+        {error && (
+          <div className="mb-6 flex items-center gap-3 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
+            <span className="material-symbols-outlined text-red-500">error</span>
+            {error}
+            <button onClick={() => setError("")} className="ml-auto">
+              <span className="material-symbols-outlined text-sm">close</span>
+            </button>
+          </div>
         )}
 
-        {/* ── INPUT METHOD SELECTION & LOADER ── */}
-        {viewState === 'INPUT_METHOD' && (
-          <main className="flex-grow px-margin-mobile md:px-margin-desktop py-stack-lg max-w-[800px] mx-auto w-full flex flex-col gap-6">
-            <h3 className="font-headline-sm text-headline-sm font-bold text-on-surface text-center">Provide Your Profile Details</h3>
-            
-            {/* Tab switchers */}
-            <div className="flex border-b border-outline-variant/30">
-              {['paste', 'upload', 'use_existing'].map(method => (
-                <button
-                  key={method}
-                  onClick={() => setInputMethod(method)}
-                  className={`flex-1 py-3 text-xs font-semibold border-b-2 transition-all cursor-pointer ${
-                    inputMethod === method ? 'border-primary text-primary font-bold' : 'border-transparent text-on-surface-variant'
-                  }`}
-                >
-                  {method === 'paste' ? 'Paste Wording' : method === 'upload' ? 'Upload PDF/DOCX' : 'Use Existing CareerAI'}
-                </button>
+        {loading && <LoadingState steps={loadingSteps} currentStep={loadingStep} />}
+
+        {!loading && isToolInput && renderToolInput()}
+
+        {!loading && result && !isToolInput && (
+          <div className="mb-8">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-black text-gray-900 text-lg">AI Results</h2>
+              <button
+                onClick={() => {
+                  setResult(null);
+                  setActiveTool(null);
+                }}
+                className="text-[12px] text-gray-500 hover:text-gray-800 flex items-center gap-1"
+              >
+                <span className="material-symbols-outlined text-sm">arrow_back</span>
+                Back to Tools
+              </button>
+            </div>
+            {renderResult()}
+          </div>
+        )}
+
+        {!loading && !isToolInput && !result && !resumeData && (
+          <div className="flex flex-col items-center py-12 text-center">
+            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#EC4899]/10 to-[#FF8A3D]/10 flex items-center justify-center mb-6">
+              <span className="material-symbols-outlined text-4xl text-[#EC4899]">auto_awesome</span>
+            </div>
+            <h2 className="text-xl font-extrabold text-gray-900 mb-2">Your AI Resume Assistant is Ready</h2>
+            <p className="text-gray-500 text-sm max-w-md mb-8">
+              Upload an existing resume (PDF, DOCX, TXT) or choose a saved resume to start using AI Studio.
+            </p>
+            <div className="flex gap-3 flex-wrap justify-center mb-10">
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="flex items-center gap-2 bg-[#EC4899] text-white px-6 py-2.5 rounded-xl font-semibold text-sm hover:opacity-90 shadow-md shadow-pink-200"
+              >
+                <span className="material-symbols-outlined text-sm">upload_file</span>Upload Resume (PDF / DOCX)
+              </button>
+              <Link
+                to="/resume/builder"
+                className="flex items-center gap-2 border border-gray-200 text-gray-700 px-6 py-2.5 rounded-xl font-semibold text-sm hover:bg-gray-50"
+              >
+                <span className="material-symbols-outlined text-sm">edit_note</span>Create Resume
+              </Link>
+            </div>
+
+            {savedResumesList.length > 0 && (
+              <div className="w-full max-w-lg text-left">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="h-px flex-1 bg-gray-100" />
+                  <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">or choose a saved resume</span>
+                  <div className="h-px flex-1 bg-gray-100" />
+                </div>
+                <div className="space-y-2">
+                  {savedResumesList.slice(0, 4).map((entry) => {
+                    const name = `${entry.data?.firstName || ""} ${entry.data?.lastName || ""}`.trim() || "Resume";
+                    const date = new Date(entry.savedAt).toLocaleDateString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    });
+                    return (
+                      <button
+                        key={entry.id}
+                        onClick={() => handleImportSaved(entry)}
+                        className="w-full flex items-center gap-3 px-4 py-3 bg-white border border-gray-100 rounded-xl hover:border-[#EC4899]/30 hover:shadow-md transition-all text-left group"
+                      >
+                        <div className="w-8 h-10 rounded-lg bg-[#EC4899]/10 flex items-center justify-center shrink-0">
+                          <span className="material-symbols-outlined text-[#EC4899] text-sm">description</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[13px] font-bold text-gray-800 truncate">{name}</p>
+                          <p className="text-[11px] text-[#EC4899]">
+                            {entry.template} template · {date}
+                          </p>
+                        </div>
+                        <span className="material-symbols-outlined text-gray-300 group-hover:text-[#EC4899] transition-colors text-sm">
+                          arrow_forward
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {!loading && !isToolInput && !result && resumeData && (
+          <>
+            <div className="mb-6">
+              <h2 className="text-lg font-black text-gray-900 mb-1">What do you want to do?</h2>
+              <p className="text-sm text-gray-500">Choose an AI-powered tool to analyze or enhance your resume.</p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-12">
+              {TOOLS.map((tool) => (
+                <ToolCard key={tool.id} {...tool} />
               ))}
             </div>
-
-            {/* Input boxes */}
-            <div className="bg-surface rounded-xl p-6 border border-outline-variant/35 shadow-sm min-h-[250px] flex flex-col justify-between">
+            {recentActivity.length > 0 && (
               <div>
-                {inputMethod === 'paste' && (
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-on-surface-variant">Pasted Profile Details</label>
-                    <textarea
-                      placeholder="Paste your education history, internship roles, details of projects, certifications, and skills..."
-                      value={pastedDetails}
-                      onChange={(e) => setPastedDetails(e.target.value)}
-                      className="w-full h-40 bg-surface border border-outline-variant rounded-lg p-3 text-xs focus:outline-none focus:border-primary resize-none"
-                    />
-                  </div>
-                )}
-
-                {inputMethod === 'upload' && (
-                  <div className="flex flex-col items-center justify-center py-8 border-2 border-dashed border-outline-variant/50 rounded-xl bg-slate-50/50 cursor-pointer" onClick={() => fileInputRef.current?.click()}>
-                    <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept=".pdf,.docx" />
-                    <span className="material-symbols-outlined text-4xl text-on-surface-variant">cloud_upload</span>
-                    <span className="text-xs font-bold text-on-surface mt-2">
-                      {uploadedFile ? uploadedFile.name : 'Select PDF or DOCX Resume'}
-                    </span>
-                    <p className="text-[10px] text-on-surface-variant mt-1">Supported formats: PDF, DOCX (Max 5MB)</p>
-                  </div>
-                )}
-
-                {inputMethod === 'use_existing' && (
-                  <div className="text-center py-8 space-y-2">
-                    <span className="material-symbols-outlined text-4xl text-primary">description</span>
-                    <h4 className="font-bold text-xs">Load Active Resume Data</h4>
-                    <p className="text-[10px] text-on-surface-variant max-w-sm mx-auto">
-                      AI Studio will extract the currently saved draft from your manual builder workspace as a base context.
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex justify-between mt-6 border-t border-outline-variant/20 pt-4">
-                <button
-                  onClick={() => setViewState('LANDING')}
-                  className="px-4 py-2 border border-outline-variant text-xs rounded-lg hover:bg-surface-container cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleStartExtraction}
-                  disabled={inputMethod === 'upload' && !uploadedFile}
-                  className="bg-primary text-on-primary px-6 py-2 rounded-lg text-xs font-bold hover:opacity-90 disabled:opacity-50 cursor-pointer"
-                >
-                  Extract Structured Data
-                </button>
-              </div>
-            </div>
-          </main>
-        )}
-
-        {/* ── EXTRACTING LOADER ── */}
-        {viewState === 'EXTRACTING' && (
-          <main className="flex-grow flex items-center justify-center p-8">
-            <div className="text-center space-y-4">
-              <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
-              <h3 className="font-bold text-sm">Extracting Career Profiles...</h3>
-              <p className="text-xs text-on-surface-variant max-w-xs mx-auto">
-                Gemini is parsing contact info, credentials, and experience into structured schemas.
-              </p>
-            </div>
-          </main>
-        )}
-
-        {/* ── REVIEW EXTRACTED INFORMATION ── */}
-        {viewState === 'REVIEW' && (
-          <main className="flex-grow px-margin-mobile md:px-margin-desktop py-stack-lg max-w-[900px] mx-auto w-full flex flex-col gap-6">
-            <div>
-              <h3 className="font-headline-sm text-headline-sm font-bold text-on-surface">Review Parsed Profile Details</h3>
-              <p className="text-xs text-on-surface-variant mt-1">Make corrections before generating final tailored summaries.</p>
-            </div>
-
-            <div className="space-y-4">
-              {/* Personal Details */}
-              <div className="bg-surface border border-outline-variant/40 rounded-xl p-4 space-y-3">
-                <h4 className="font-bold text-xs text-primary flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-sm">person</span> Personal Information
-                </h4>
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  <div>
-                    <label className="text-[10px] text-on-surface-variant font-semibold">Full Name</label>
-                    <input
-                      type="text"
-                      value={resumeData.personal.fullName}
-                      onChange={(e) => setResumeData({ ...resumeData, personal: { ...resumeData.personal, fullName: e.target.value } })}
-                      className="w-full bg-slate-50 border border-outline-variant rounded p-2 focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] text-on-surface-variant font-semibold">Target Title</label>
-                    <input
-                      type="text"
-                      value={resumeData.personal.title}
-                      onChange={(e) => setResumeData({ ...resumeData, personal: { ...resumeData.personal, title: e.target.value } })}
-                      className="w-full bg-slate-50 border border-outline-variant rounded p-2 focus:outline-none"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Experience list */}
-              <div className="bg-surface border border-outline-variant/40 rounded-xl p-4 space-y-3">
-                <h4 className="font-bold text-xs text-primary flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-sm">work</span> Professional Experience
-                </h4>
-                {resumeData.experience && resumeData.experience.length > 0 ? (
-                  resumeData.experience.map((exp, idx) => (
-                    <div key={exp.id || idx} className="p-3 bg-slate-50 rounded border border-outline-variant/20 grid grid-cols-2 gap-3 text-xs">
-                      <div>
-                        <label className="text-[10px] text-on-surface-variant font-semibold">Company</label>
-                        <input
-                          type="text"
-                          value={exp.company}
-                          onChange={(e) => {
-                            const updated = [...resumeData.experience];
-                            updated[idx].company = e.target.value;
-                            setResumeData({ ...resumeData, experience: updated });
-                          }}
-                          className="w-full bg-white border border-outline-variant rounded p-1.5"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] text-on-surface-variant font-semibold">Position</label>
-                        <input
-                          type="text"
-                          value={exp.position}
-                          onChange={(e) => {
-                            const updated = [...resumeData.experience];
-                            updated[idx].position = e.target.value;
-                            setResumeData({ ...resumeData, experience: updated });
-                          }}
-                          className="w-full bg-white border border-outline-variant rounded p-1.5"
-                        />
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-[10px] text-on-surface-variant">No experience parsed.</p>
-                )}
-              </div>
-            </div>
-
-            <div className="flex justify-between mt-6 border-t border-outline-variant/20 pt-4">
-              <button
-                onClick={() => setViewState('INPUT_METHOD')}
-                className="px-4 py-2 border border-outline-variant text-xs rounded-lg hover:bg-surface-container cursor-pointer"
-              >
-                Back
-              </button>
-              <button
-                onClick={() => setViewState('CONFIGURE')}
-                className="bg-primary text-on-primary px-6 py-2 rounded-lg text-xs font-bold hover:opacity-90 cursor-pointer"
-              >
-                Continue to Optimize
-              </button>
-            </div>
-          </main>
-        )}
-
-        {/* ── CONFIGURE TARGET & TAILOR ── */}
-        {viewState === 'CONFIGURE' && (
-          <main className="flex-grow px-margin-mobile md:px-margin-desktop py-stack-lg max-w-[800px] mx-auto w-full flex flex-col gap-6">
-            <h3 className="font-headline-sm text-headline-sm font-bold text-on-surface text-center">Configure Target Role & Options</h3>
-            
-            <div className="bg-surface rounded-xl p-6 border border-outline-variant/35 shadow-sm space-y-4">
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-on-surface-variant mb-1">Target Position</label>
-                  <select
-                    value={targetRole}
-                    onChange={(e) => setTargetRole(e.target.value)}
-                    className="w-full bg-surface border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary"
-                  >
-                    <option value="Python Developer">Python Developer</option>
-                    <option value="Machine Learning Engineer">Machine Learning Engineer</option>
-                    <option value="Data Scientist">Data Scientist</option>
-                    <option value="Software Engineer">Software Engineer</option>
-                    <option value="Backend Developer">Backend Developer</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-on-surface-variant mb-1">Wording Tone</label>
-                  <select
-                    value={tone}
-                    onChange={(e) => setTone(e.target.value)}
-                    className="w-full bg-surface border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary"
-                  >
-                    <option value="Professional">Professional</option>
-                    <option value="Technical">Technical Accent</option>
-                    <option value="Balanced">Balanced</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="block text-xs font-bold text-on-surface-variant">Optional Target Job Description</label>
-                <textarea
-                  placeholder="Paste details of the target job description to match keywords..."
-                  value={jobDescription}
-                  onChange={(e) => setJobDescription(e.target.value)}
-                  className="w-full h-32 bg-surface border border-outline-variant rounded-lg p-3 text-xs focus:outline-none focus:border-primary resize-none"
-                />
-              </div>
-
-              <div className="flex justify-between mt-6 border-t border-outline-variant/20 pt-4">
-                <button
-                  onClick={() => setViewState('REVIEW')}
-                  className="px-4 py-2 border border-outline-variant text-xs rounded-lg hover:bg-surface-container cursor-pointer"
-                >
-                  Back
-                </button>
-                <button
-                  onClick={handleGenerateResume}
-                  className="bg-secondary text-white px-6 py-2 rounded-lg text-xs font-bold hover:opacity-90 cursor-pointer"
-                >
-                  Generate Resume
-                </button>
-              </div>
-
-            </div>
-          </main>
-        )}
-
-        {/* ── GENERATING LOADER ── */}
-        {viewState === 'GENERATING' && (
-          <main className="flex-grow flex items-center justify-center p-8">
-            <div className="text-center space-y-4">
-              <div className="w-12 h-12 border-4 border-secondary border-t-transparent rounded-full animate-spin mx-auto"></div>
-              <h3 className="font-bold text-sm">Polishing & Tailoring Wording...</h3>
-              <p className="text-xs text-on-surface-variant max-w-xs mx-auto">
-                Gemini is optimizing summary phrases and structural action verbs based on tone.
-              </p>
-            </div>
-          </main>
-        )}
-
-        {/* ── CHAT EDITOR & PREVIEW WORKSPACE ── */}
-        {viewState === 'WORKSPACE' && (
-          <main className="flex-1 w-full flex flex-col lg:flex-row overflow-hidden border-t border-outline-variant/30 bg-surface-container-lowest">
-            
-            {/* Left Control Workspace (Chat, scores, versions) */}
-            <div className="w-full lg:w-[45%] xl:w-[40%] flex flex-col border-r border-outline-variant bg-surface relative h-full overflow-hidden">
-              
-              {/* Selector Tabs */}
-              <div className="flex border-b border-outline-variant/20 bg-slate-50 shrink-0">
-                {['chat', 'ats', 'versions'].map(tab => (
-                  <button
-                    key={tab}
-                    onClick={() => setActiveTab(tab)}
-                    className={`flex-1 py-3 text-xs font-semibold border-b-2 uppercase tracking-wider transition-all cursor-pointer ${
-                      activeTab === tab ? 'border-primary text-primary font-bold bg-white' : 'border-transparent text-on-surface-variant'
-                    }`}
-                  >
-                    {tab === 'chat' ? 'AI Assistant' : tab === 'ats' ? 'ATS Optimizer' : 'Versions'}
-                  </button>
-                ))}
-              </div>
-
-              {/* TAB CONTENT: CHAT EDITOR */}
-              {activeTab === 'chat' && (
-                <div className="flex-1 flex flex-col overflow-hidden">
-                  {/* Chat messages */}
-                  <div className="flex-1 overflow-y-auto p-4 space-y-3 editor-scroll">
-                    {chatMessages.map((msg, idx) => (
-                      <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-[85%] rounded-xl p-3 text-xs leading-relaxed ${
-                          msg.role === 'user'
-                            ? 'bg-primary text-on-primary rounded-tr-none'
-                            : 'bg-surface-container-low border border-outline-variant/30 text-on-surface rounded-tl-none'
-                        }`}>
-                          <p>{msg.content}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Context controls (section selector, compare) */}
-                  <div className="p-3 border-t border-outline-variant/25 bg-slate-50 flex items-center justify-between shrink-0">
-                    <div className="flex items-center gap-1.5 text-[10px]">
-                      <span className="font-semibold text-on-surface-variant">Focus:</span>
-                      <select
-                        value={selectedSection}
-                        onChange={(e) => setSelectedSection(e.target.value)}
-                        className="bg-white border border-outline-variant rounded px-1.5 py-0.5 focus:outline-none"
-                      >
-                        <option value="All">All Sections</option>
-                        <option value="Summary">Summary</option>
-                        <option value="Experience">Experience</option>
-                        <option value="Projects">Projects</option>
-                        <option value="Skills">Skills</option>
-                      </select>
-                    </div>
-
-                    <button
-                      onClick={() => setShowComparison(!showComparison)}
-                      className={`px-3 py-1 rounded text-[10px] font-bold border transition-colors cursor-pointer ${
-                        showComparison ? 'bg-primary/10 border-primary text-primary' : 'border-outline-variant text-on-surface-variant'
-                      }`}
-                    >
-                      Compare view: {showComparison ? 'ON' : 'OFF'}
-                    </button>
-                  </div>
-
-                  {/* Input bar */}
-                  <div className="p-3 border-t border-outline-variant/30 flex gap-2 shrink-0 bg-white">
-                    <input
-                      type="text"
-                      placeholder="Type edit instructions (e.g. shorten summary)..."
-                      value={userInputMessage}
-                      onChange={(e) => setUserInputMessage(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-                      className="flex-1 bg-slate-50 border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary"
-                    />
-                    <button
-                      onClick={handleSendMessage}
-                      disabled={isSendingMessage}
-                      className="bg-primary text-on-primary w-9 h-9 rounded-lg flex items-center justify-center hover:opacity-90 transition-opacity cursor-pointer shrink-0"
-                    >
-                      <span className="material-symbols-outlined text-lg">send</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* TAB CONTENT: ATS OPTIMIZATION */}
-              {activeTab === 'ats' && (
-                <div className="flex-1 overflow-y-auto p-4 space-y-4 editor-scroll">
-                  <div className="flex justify-between items-center bg-slate-50 p-3 rounded-lg border border-outline-variant/20">
-                    <div>
-                      <h4 className="font-bold text-xs">ATS Match Score</h4>
-                      <p className="text-[10px] text-on-surface-variant mt-0.5">Tailored for: {targetRole}</p>
-                    </div>
-                    <span className="text-xl font-bold text-secondary bg-secondary/10 px-3 py-1 rounded">
-                      {scores.ats}/100
-                    </span>
-                  </div>
-
-                  {/* Suggestions checklist */}
-                  <div className="space-y-3">
-                    <h5 className="font-bold text-[10px] text-on-surface-variant uppercase tracking-wider">
-                      Optimization Checklists
-                    </h5>
-                    {suggestions.map(sug => (
-                      <div key={sug.id} className="p-3 bg-surface border border-outline-variant/25 rounded-lg space-y-2 text-xs">
-                        <div className="flex justify-between">
-                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
-                            sug.priority === 'high' ? 'bg-error/10 text-error' : 'bg-amber-100 text-amber-800'
-                          }`}>
-                            {sug.priority} Priority
+                <h2 className="text-base font-black text-gray-900 mb-4">Recent AI Activity</h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {recentActivity.map((a) => (
+                    <div key={a.id} className="bg-white border border-gray-100 rounded-xl px-4 py-3 hover:shadow-md transition-all">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className="w-6 h-6 rounded-lg bg-[#EC4899]/10 flex items-center justify-center">
+                          <span className="material-symbols-outlined text-[#EC4899]" style={{ fontSize: 13 }}>
+                            auto_awesome
                           </span>
-                          <span className="text-[10px] text-on-surface-variant font-bold capitalize">{sug.section}</span>
-                        </div>
-                        <p className="text-[11px] text-on-surface-variant font-medium">{sug.issue}</p>
-                        <p className="text-[10px] text-slate-500">{sug.suggestion}</p>
-                        <button
-                          onClick={() => {
-                            setUserInputMessage(sug.fix_prompt);
-                            setActiveTab('chat');
-                          }}
-                          className="text-[10px] text-primary font-bold hover:underline block text-right mt-1 cursor-pointer"
-                        >
-                          Use prompt to fix
-                        </button>
+                        </span>
+                        <span className="text-[12px] font-bold text-gray-800">{a.type}</span>
                       </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* TAB CONTENT: VERSIONS */}
-              {activeTab === 'versions' && (
-                <div className="flex-1 overflow-y-auto p-4 space-y-3 editor-scroll">
-                  <h4 className="font-bold text-xs text-on-surface-variant mb-2">Saved Session Revisions</h4>
-                  {versions.map((ver, i) => (
-                    <div key={i} className="bg-slate-50 border border-outline-variant/20 p-3 rounded-lg flex justify-between items-center text-xs">
-                      <div>
-                        <p className="font-bold text-on-surface">Version {i + 1}</p>
-                        <p className="text-[10px] text-on-surface-variant truncate max-w-[180px]">{ver.label}</p>
-                      </div>
-                      <button
-                        onClick={() => handleRestoreVersion(ver)}
-                        className="text-[10px] text-secondary font-bold hover:underline cursor-pointer"
-                      >
-                        Restore
-                      </button>
+                      <p className="text-[11px] text-gray-500 truncate mb-1">{a.detail}</p>
+                      {a.extra?.score && <p className="text-[11px] font-semibold text-[#EC4899]">Score: {a.extra.score}</p>}
                     </div>
                   ))}
                 </div>
-              )}
-
-              {/* Apply/Save Action Bar */}
-              <div className="h-16 border-t border-outline-variant px-6 flex items-center justify-between shrink-0 bg-white">
-                <button
-                  onClick={() => setViewState('CONFIGURE')}
-                  className="px-4 py-2 border border-outline-variant rounded-lg text-xs font-semibold hover:bg-slate-50 cursor-pointer"
-                >
-                  Configure Target
-                </button>
-                <button
-                  onClick={handleApplyToBuilder}
-                  className="bg-primary text-on-primary px-6 py-2.5 rounded-lg text-xs font-bold hover:opacity-90 shadow-sm cursor-pointer"
-                >
-                  Apply to Manual Builder
-                </button>
               </div>
-
-            </div>
-
-            {/* Right Live Document Preview */}
-            <div className="flex-1 bg-slate-100 flex flex-col relative h-full overflow-hidden p-6 md:p-8 overflow-y-auto">
-              
-              {/* Compare side by side display if enabled */}
-              {showComparison ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-[1200px] mx-auto">
-                  <div>
-                    <span className="text-[10px] font-bold text-on-surface-variant uppercase mb-1 block">Original Base Resume</span>
-                    <div className="scale-[0.8] origin-top-left shadow-lg">
-                      <ResumePreview resumeData={originalResumeData} scale={100} />
-                    </div>
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-bold text-secondary uppercase mb-1 block">AI Polished / Optimized</span>
-                    <div className="scale-[0.8] origin-top-left shadow-lg">
-                      <ResumePreview resumeData={resumeData} scale={100} />
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="shadow-lg">
-                  <ResumePreview resumeData={resumeData} templateId={localStorage.getItem('careerai_template_id') || 'Modern'} scale={90} />
-                </div>
-              )}
-
-            </div>
-
-          </main>
+            )}
+          </>
         )}
+      </div>
+
+      {/* AI Chat Side Drawer */}
+      {showChat && (
+        <div className="fixed inset-y-0 right-0 w-full sm:w-[420px] bg-white shadow-2xl z-50 flex flex-col border-l border-gray-200">
+          <div className="px-5 py-4 bg-gradient-to-r from-purple-700 to-indigo-700 text-white flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-xl">auto_awesome</span>
+              <div>
+                <h3 className="font-bold text-sm">Resume AI Assistant</h3>
+                <p className="text-[10px] text-purple-200">Context aware of active resume</p>
+              </div>
+            </div>
+            <button onClick={() => setShowChat(false)} className="text-purple-200 hover:text-white">
+              <span className="material-symbols-outlined text-sm">close</span>
+            </button>
+          </div>
+
+          <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-gray-50">
+            {chatMessages.map((msg, i) => (
+              <div key={i} className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}>
+                <div
+                  className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-xs ${
+                    msg.role === "user" ? "bg-purple-600 text-white" : "bg-white border border-gray-200 text-gray-800 shadow-sm"
+                  }`}
+                >
+                  {msg.content}
+                </div>
+                {msg.followups && msg.followups.length > 0 && (
+                  <div className="mt-2 space-y-1 max-w-[85%]">
+                    {msg.followups.map((f, fi) => (
+                      <button
+                        key={fi}
+                        onClick={() => {
+                          setChatInput(f);
+                        }}
+                        className="text-[10px] text-purple-700 bg-purple-50 border border-purple-200 px-2.5 py-1 rounded-full text-left hover:bg-purple-100 block w-full"
+                      >
+                        {f}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+            {chatLoading && (
+              <div className="flex items-center gap-2 text-xs text-gray-400 italic">
+                <span className="material-symbols-outlined text-sm animate-spin">sync</span>
+                Gemini is thinking...
+              </div>
+            )}
+          </div>
+
+          <div className="p-3 bg-white border-t border-gray-200 flex gap-2">
+            <input
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSendChatMessage()}
+              placeholder="Ask about your resume..."
+              className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-200"
+            />
+            <button
+              onClick={handleSendChatMessage}
+              disabled={!chatInput.trim() || chatLoading}
+              className="px-4 py-2 bg-purple-600 text-white rounded-xl text-xs font-bold disabled:opacity-50"
+            >
+              Send
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ToolInputPanel({ title, icon, accent, onBack, onRun, runLabel, canRun, children }) {
+  return (
+    <div className="bg-white border border-gray-100 rounded-2xl p-6 max-w-2xl">
+      <div className="flex items-center gap-3 mb-5">
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: `${accent}15` }}>
+          <span className="material-symbols-outlined" style={{ color: accent }}>
+            {icon}
+          </span>
+        </div>
+        <h2 className="font-black text-gray-900 text-base">{title}</h2>
+      </div>
+      {children}
+      <div className="flex gap-3 mt-5">
+        <button onClick={onBack} className="px-4 py-2 rounded-xl border border-gray-200 text-gray-600 text-sm font-semibold hover:bg-gray-50">
+          Back
+        </button>
+        <button
+          onClick={onRun}
+          disabled={!canRun}
+          className="flex-1 py-2 rounded-xl text-white text-sm font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+          style={{ background: canRun ? `linear-gradient(135deg, ${accent}, ${accent}cc)` : "#d1d5db" }}
+        >
+          {runLabel}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function AnalyzeResult({ data, accent }) {
+  return (
+    <div className="space-y-5">
+      <div className="bg-white border border-gray-100 rounded-2xl p-6 flex items-center gap-8 flex-wrap">
+        <div className="relative flex items-center justify-center">
+          <ScoreRing score={data.overall_score || 0} size={96} color={accent} />
+          <div className="absolute flex flex-col items-center">
+            <span className="text-2xl font-black" style={{ color: accent }}>
+              {data.overall_score}
+            </span>
+            <span className="text-[9px] text-gray-400 font-bold">/100</span>
+          </div>
+        </div>
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-2xl font-black text-gray-900">{data.quality_grade || "B"}</span>
+            <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold">Quality Grade</span>
+          </div>
+          <p className="text-sm text-gray-600 max-w-md">{data.summary_text}</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        {data.strengths?.length > 0 && (
+          <div className="bg-green-50 border border-green-100 rounded-2xl p-5">
+            <h3 className="font-bold text-green-800 text-sm mb-3 flex items-center gap-2">
+              <span className="material-symbols-outlined text-green-600 text-sm">check_circle</span>Strengths
+            </h3>
+            <ul className="space-y-1.5">
+              {data.strengths.map((s, i) => (
+                <li key={i} className="text-[12px] text-green-700">
+                  • {s}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {data.weaknesses?.length > 0 && (
+          <div className="bg-red-50 border border-red-100 rounded-2xl p-5">
+            <h3 className="font-bold text-red-800 text-sm mb-3 flex items-center gap-2">
+              <span className="material-symbols-outlined text-red-500 text-sm">warning</span>Weaknesses
+            </h3>
+            <ul className="space-y-1.5">
+              {data.weaknesses.map((s, i) => (
+                <li key={i} className="text-[12px] text-red-700">
+                  • {s}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+
+      {data.recommendations?.length > 0 && (
+        <div className="bg-white border border-gray-100 rounded-2xl p-6">
+          <h3 className="font-bold text-gray-800 text-sm mb-3">Recommendations</h3>
+          {data.recommendations.map((r, i) => (
+            <div key={i} className="flex gap-3 items-start mb-3">
+              <span
+                className={`text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 ${
+                  r.priority === "high" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
+                }`}
+              >
+                {r.priority?.toUpperCase()}
+              </span>
+              <div>
+                <p className="text-[12px] font-semibold text-gray-800">{r.section}</p>
+                <p className="text-[11px] text-gray-500">{r.action}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ATSResult({ data, accent, onFix }) {
+  const scores = [
+    ["Keyword Optimization", data.keyword_score || 0],
+    ["Structure Completeness", data.structure_score || 0],
+    ["Readability Rating", data.readability_score || 0],
+    ["Section Completeness", data.section_completeness || 0],
+  ];
+
+  return (
+    <div className="space-y-5">
+      <div className="bg-white border border-gray-100 rounded-2xl p-6 flex items-center gap-8 flex-wrap">
+        <div className="relative flex items-center justify-center">
+          <ScoreRing score={data.ats_score || 0} size={96} color={accent} />
+          <div className="absolute flex flex-col items-center">
+            <span className="text-2xl font-black" style={{ color: accent }}>
+              {data.ats_score}
+            </span>
+            <span className="text-[9px] text-gray-400 font-bold">ATS Score</span>
+          </div>
+        </div>
+        <div className="flex-1 min-w-[200px]">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-[11px] bg-blue-50 text-blue-700 px-2.5 py-0.5 rounded-full font-bold border border-blue-100">
+              {data.disclaimer || "AI-based ATS compatibility estimate"}
+            </span>
+          </div>
+          <div className="space-y-2">
+            {scores.map(([l, v]) => (
+              <ScoreBar key={l} label={l} value={v} color={accent} />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {data.issues?.length > 0 && (
+        <div className="bg-amber-50 border border-amber-100 rounded-2xl p-5">
+          <h3 className="font-bold text-amber-800 text-sm mb-3">ATS Formatting & Keyword Issues</h3>
+          {data.issues.map((issue, i) => (
+            <div key={i} className="flex items-center gap-2 text-[12px] text-amber-700 mb-1">
+              <span className="material-symbols-outlined text-sm text-amber-600">info</span>
+              <b>{issue.section}:</b> {issue.issue}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {data.recommendations?.length > 0 && (
+        <div className="bg-white border border-gray-100 rounded-2xl p-5">
+          <h3 className="font-bold text-gray-800 text-sm mb-3">Fix Suggestions</h3>
+          {data.recommendations.map((s, i) => (
+            <div key={i} className="flex gap-2 text-[12px] mb-2">
+              <span
+                className={`text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 h-fit ${
+                  s.priority === "high" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
+                }`}
+              >
+                {s.priority}
+              </span>
+              <span className="text-gray-600">
+                <b className="text-gray-800">{s.section}:</b> {s.fix}
+              </span>
+            </div>
+          ))}
+          <button onClick={onFix} className="mt-3 px-5 py-2 bg-[#0EA5E9] text-white rounded-xl text-sm font-bold hover:opacity-90">
+            Fix with AI
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ImproveResult({ data, onApply }) {
+  return (
+    <div className="bg-white border border-gray-100 rounded-2xl p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="font-bold text-gray-800">AI Suggested Resume Proofread & Grammar Fixes</h3>
+        <span className="text-[11px] bg-purple-100 text-purple-700 px-2.5 py-1 rounded-full font-bold">
+          Review Before Applying
+        </span>
+      </div>
+      <p className="text-sm text-gray-600 mb-4">
+        The AI fixed grammar, spelling, and sentence clarity while preserving all your real experience and facts.
+      </p>
+      {data.changes_made?.length > 0 && (
+        <div className="bg-purple-50 rounded-xl p-4 mb-4 space-y-1">
+          {data.changes_made.map((c, i) => (
+            <p key={i} className="text-[11px] text-purple-800">
+              • <b>{c.section}:</b> {c.change}
+            </p>
+          ))}
+        </div>
+      )}
+      <div className="flex gap-3 flex-wrap">
+        <button
+          onClick={onApply}
+          className="flex items-center gap-2 px-5 py-2 bg-[#8B5CF6] text-white rounded-xl text-sm font-bold hover:opacity-90"
+        >
+          <span className="material-symbols-outlined text-sm">check</span>Apply Proofread Changes
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function JobMatchResult({ data, accent }) {
+  return (
+    <div className="space-y-5">
+      <div className="bg-white border border-gray-100 rounded-2xl p-6 flex items-center gap-8 flex-wrap">
+        <div className="relative flex items-center justify-center">
+          <ScoreRing score={data.overall_match || 0} size={96} color={accent} />
+          <div className="absolute flex flex-col items-center">
+            <span className="text-2xl font-black" style={{ color: accent }}>
+              {data.overall_match}%
+            </span>
+            <span className="text-[9px] text-gray-400 font-bold">Match</span>
+          </div>
+        </div>
+        <div className="flex-1 min-w-[200px]">
+          <p className="font-bold text-gray-900 mb-2">Job Description Match Analysis</p>
+          <div className="space-y-2">
+            {[
+              ["Skills Match", data.skills_match],
+              ["Keyword Match", data.keyword_match],
+              ["Experience Match", data.experience_match],
+              ["Education Match", data.education_match],
+            ].map(([l, v]) => (
+              <ScoreBar key={l} label={l} value={v || 0} color={accent} />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div className="bg-green-50 border border-green-100 rounded-2xl p-5">
+          <h3 className="font-bold text-green-800 text-sm mb-3">Existing Skills (In Resume)</h3>
+          <div className="flex flex-wrap gap-1.5">
+            {(data.matching_skills || []).map((s, i) => (
+              <span key={i} className="text-[11px] bg-white border border-green-200 text-green-700 px-2 py-0.5 rounded-full">
+                {s}
+              </span>
+            ))}
+          </div>
+        </div>
+        <div className="bg-red-50 border border-red-100 rounded-2xl p-5">
+          <h3 className="font-bold text-red-800 text-sm mb-3">Missing Skills (Required)</h3>
+          <div className="flex flex-wrap gap-1.5">
+            {(data.missing_skills || []).map((s, i) => (
+              <span key={i} className="text-[11px] bg-white border border-red-200 text-red-700 px-2 py-0.5 rounded-full">
+                {s}
+              </span>
+            ))}
+          </div>
+        </div>
+        <div className="bg-amber-50 border border-amber-100 rounded-2xl p-5">
+          <h3 className="font-bold text-amber-800 text-sm mb-3">Suggested Skills</h3>
+          <div className="flex flex-wrap gap-1.5">
+            {(data.suggested_skills || []).map((s, i) => (
+              <span key={i} className="text-[11px] bg-white border border-amber-200 text-amber-700 px-2 py-0.5 rounded-full">
+                {s}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {data.recommendations?.length > 0 && (
+        <div className="bg-white border border-gray-100 rounded-2xl p-5">
+          <h3 className="font-bold text-gray-800 text-sm mb-3">Match Recommendations</h3>
+          {data.recommendations.map((r, i) => (
+            <p key={i} className="text-[12px] text-gray-600 mb-1.5">
+              • {r}
+            </p>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TailorResult({ data, tailored, original, onApply }) {
+  const [view, setView] = useState("tailored");
+  return (
+    <div className="space-y-5">
+      <div className="bg-white border border-gray-100 rounded-2xl p-6">
+        <div className="flex items-center gap-2 mb-4 flex-wrap">
+          <h3 className="font-bold text-gray-800 flex-1">Tailored Resume Preview</h3>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setView("original")}
+              className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold border ${
+                view === "original" ? "bg-gray-900 text-white border-gray-900" : "border-gray-200 text-gray-600"
+              }`}
+            >
+              Original
+            </button>
+            <button
+              onClick={() => setView("tailored")}
+              className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold border ${
+                view === "tailored" ? "bg-amber-500 text-white border-amber-500" : "border-gray-200 text-gray-600"
+              }`}
+            >
+              Tailored
+            </button>
+          </div>
+        </div>
+
+        {data.changes?.length > 0 && (
+          <div className="bg-amber-50 rounded-xl p-4 mb-4">
+            <p className="text-[11px] font-bold text-amber-700 mb-2">Section Changes Made:</p>
+            {data.changes.map((c, i) => (
+              <p key={i} className="text-[11px] text-amber-700">
+                • <b>{c.section}:</b> {c.change}
+              </p>
+            ))}
+          </div>
+        )}
+
+        <div className="bg-gray-50 rounded-xl p-4 max-h-48 overflow-y-auto text-[12px] text-gray-700 leading-relaxed font-mono">
+          {view === "tailored"
+            ? tailored?.summary || "Tailored summary."
+            : original?.summary || "Original summary."}
+        </div>
+
+        <div className="flex gap-3 mt-4 flex-wrap">
+          <button
+            onClick={onApply}
+            className="flex items-center gap-2 px-5 py-2 bg-amber-500 text-white rounded-xl text-sm font-bold hover:opacity-90"
+          >
+            <span className="material-symbols-outlined text-sm">check</span>Apply Changes
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SkillsResult({ data }) {
+  const cats = [
+    { key: "existing_skills", label: "Already Have", icon: "check_circle", color: "#10B981", bg: "bg-green-50", border: "border-green-100" },
+    { key: "missing_skills", label: "Missing Required", icon: "warning", color: "#EF4444", bg: "bg-red-50", border: "border-red-100" },
+    { key: "recommended_skills", label: "Recommended", icon: "star", color: "#F59E0B", bg: "bg-amber-50", border: "border-amber-100" },
+  ];
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+      {cats.map((cat) => (
+        <div key={cat.key} className={`${cat.bg} border ${cat.border} rounded-2xl p-5`}>
+          <div className="flex items-center gap-2 mb-4">
+            <span className="material-symbols-outlined text-sm" style={{ color: cat.color }}>
+              {cat.icon}
+            </span>
+            <h3 className="font-bold text-gray-800 text-sm flex-1">{cat.label}</h3>
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-white" style={{ color: cat.color }}>
+              {(data[cat.key] || []).length}
+            </span>
+          </div>
+          <div className="space-y-2">
+            {(data[cat.key] || []).map((s, i) => (
+              <div key={i} className="bg-white rounded-lg px-3 py-2 shadow-sm">
+                <div className="flex items-center justify-between mb-0.5">
+                  <span className="text-[12px] font-bold text-gray-800">{s.name}</span>
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: `${cat.color}20`, color: cat.color }}>
+                    {s.importance || "medium"}
+                  </span>
+                </div>
+                {s.reason && <p className="text-[10px] text-gray-500">{s.reason}</p>}
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function BulletResult({ data, accent }) {
+  const [copied, setCopied] = useState(null);
+  const copy = (text, i) => {
+    navigator.clipboard.writeText(text);
+    setCopied(i);
+    setTimeout(() => setCopied(null), 2000);
+  };
+
+  const versions = data.improved || [
+    { version: "Professional", text: data.professional },
+    { version: "ATS Friendly", text: data.ats_friendly },
+    { version: "Technical", text: data.technical },
+    { version: "Achievement-Focused", text: data.achievement_focused },
+    { version: "Concise", text: data.concise },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+        <p className="text-[11px] font-bold text-gray-500 mb-1">Original Bullet</p>
+        <p className="text-sm text-gray-700 italic">"{data.original}"</p>
+      </div>
+
+      {versions.map((v, i) => (
+        <div key={i} className="bg-white border border-gray-100 rounded-xl p-5 hover:shadow-md transition-all">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[11px] font-black px-2.5 py-0.5 rounded-full text-white" style={{ background: accent }}>
+              {v.version}
+            </span>
+            <button onClick={() => copy(v.text, i)} className="text-[11px] text-gray-500 hover:text-gray-800 flex items-center gap-1">
+              <span className="material-symbols-outlined" style={{ fontSize: 13 }}>
+                {copied === i ? "check" : "content_copy"}
+              </span>
+              {copied === i ? "Copied!" : "Copy"}
+            </button>
+          </div>
+          <p className="text-sm text-gray-800 font-medium mb-1">"{v.text}"</p>
+          {v.explanation && <p className="text-[11px] text-gray-500">{v.explanation}</p>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function GenerateResult({ data, onApply }) {
+  return (
+    <div className="bg-white border border-gray-100 rounded-2xl p-6">
+      <h3 className="font-bold text-gray-800 mb-2">Resume Generated for {data.target_role}</h3>
+      <p className="text-sm text-gray-600 mb-1">
+        <b>Name:</b> {data.resume_data?.personal?.fullName}
+      </p>
+      <p className="text-sm text-gray-600 mb-4">
+        <b>Summary:</b> {(data.resume_data?.summary || "").substring(0, 150)}...
+      </p>
+      <div className="flex gap-3 flex-wrap">
+        <button
+          onClick={onApply}
+          className="flex items-center gap-2 px-5 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:opacity-90"
+        >
+          <span className="material-symbols-outlined text-sm">edit_note</span>Load into Builder
+        </button>
+      </div>
     </div>
   );
 }

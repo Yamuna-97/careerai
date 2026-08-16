@@ -48,7 +48,7 @@ class JobSearchProfileResponse(JobSearchProfileBase):
 
 class SavedJobBase(BaseModel):
     external_job_id: str
-    source: str = "adzuna"
+    source: str = "jsearch"
     title: str
     company: Optional[str] = ""
     location: Optional[str] = ""

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
+import apiClient from '../api/client';
+import { getAuthToken } from '../utils/auth';
 
 /* ─── AI Chat Panel ─────────────────────────────────────────────────── */
 function AIChatPanel({ onClose, userName = 'User' }) {
@@ -103,50 +105,35 @@ export default function DashboardPage() {
     async function loadDashboardData() {
       setIsLoading(true);
       try {
-        const token = localStorage.getItem('token');
+        const token = await getAuthToken();
         if (!token) {
           setIsLoading(false);
           return;
         }
 
-        const headers = { 'Authorization': `Bearer ${token}` };
+        // Fetch all protected dashboard endpoints using centralized apiClient
+        const [userRes, jobRes, resumesRes, readinessRes] = await Promise.allSettled([
+          apiClient.get('/users/me'),
+          apiClient.get('/jobs/profile'),
+          apiClient.get('/resumes'),
+          apiClient.get('/interviews/readiness')
+        ]);
 
-        // 1. Fetch User Profile
-        const userRes = await fetch("http://localhost:8000/api/v1/users/me", { headers });
-        if (userRes.ok) {
-          const userData = await userRes.json();
-          setProfile(userData);
-        }
+        if (userRes.status === 'fulfilled') setProfile(userRes.value.data);
+        if (jobRes.status === 'fulfilled') setJobProfile(jobRes.value.data);
+        if (readinessRes.status === 'fulfilled') setInterviewReadiness(readinessRes.value.data);
 
-        // 2. Fetch Job Profile
-        const jobRes = await fetch("http://localhost:8000/api/v1/jobs/profile", { headers });
-        if (jobRes.ok) {
-          const jobData = await jobRes.json();
-          setJobProfile(jobData);
-        }
+        if (resumesRes.status === 'fulfilled' && resumesRes.value.data?.length > 0) {
+          const resumes = resumesRes.value.data;
+          resumes.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+          const latestResume = resumes[0];
 
-        // 3. Fetch Resumes & Stats
-        const resumesRes = await fetch("http://localhost:8000/api/v1/resumes", { headers });
-        if (resumesRes.ok) {
-          const resumes = await resumesRes.json();
-          if (resumes && resumes.length > 0) {
-            // Sort by updated_at descending to get the latest
-            resumes.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
-            const latestResume = resumes[0];
-
-            const statsRes = await fetch(`http://localhost:8000/api/v1/resumes/${latestResume.id}/stats`, { headers });
-            if (statsRes.ok) {
-              const statsData = await statsRes.json();
-              setLatestResumeStats(statsData);
-            }
+          try {
+            const statsData = await apiClient.get(`/resumes/${latestResume.id}/stats`);
+            setLatestResumeStats(statsData.data);
+          } catch (e) {
+            console.warn("Could not fetch resume stats:", e);
           }
-        }
-
-        // 4. Fetch Interview Readiness
-        const readinessRes = await fetch("http://localhost:8000/api/v1/interviews/readiness", { headers });
-        if (readinessRes.ok) {
-          const readinessData = await readinessRes.json();
-          setInterviewReadiness(readinessData);
         }
 
       } catch (err) {
@@ -238,7 +225,7 @@ export default function DashboardPage() {
                 <div className="flex flex-wrap gap-3">
                   <Link
                     to="/resume-editor"
-                    className="bg-primary hover:bg-[#4338CA] text-on-primary px-5 py-2.5 rounded-lg font-label-md text-label-md transition-colors shadow-sm inline-flex items-center gap-2"
+                    className="bg-gradient-to-r from-[#EC4899] to-[#FF8A3D] text-white px-5 py-2.5 rounded-lg font-label-md text-label-md transition-opacity shadow-md hover:opacity-95 inline-flex items-center gap-2 font-bold"
                   >
                     Create Resume
                     <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
@@ -305,7 +292,7 @@ export default function DashboardPage() {
                   <Link
                     to="/resume-editor"
                     onClick={(e) => e.stopPropagation()}
-                    className="bg-primary hover:bg-[#4338CA] text-on-primary px-4 py-2 rounded-lg font-label-md text-label-md transition-colors shadow-sm inline-flex items-center gap-2 whitespace-nowrap"
+                    className="bg-gradient-to-r from-[#EC4899] to-[#FF8A3D] text-white px-4 py-2 rounded-lg font-label-md text-label-md transition-opacity shadow-md hover:opacity-95 inline-flex items-center gap-2 whitespace-nowrap font-bold"
                   >
                     Resume Editor
                     <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
@@ -516,7 +503,7 @@ export default function DashboardPage() {
                         <button className="text-[11px] px-3 py-1.5 rounded border border-outline-variant text-on-surface-variant hover:bg-surface-container transition-colors font-label-sm cursor-pointer">
                           Save
                         </button>
-                        <Link to="/jobs" className="text-[11px] px-3 py-1.5 rounded bg-primary text-on-primary hover:bg-[#4338CA] transition-colors font-label-sm cursor-pointer ml-auto">
+                        <Link to="/jobs" className="text-[11px] px-3 py-1.5 rounded text-white bg-gradient-to-r from-[#EC4899] to-[#FF8A3D] hover:opacity-90 transition-all font-label-sm cursor-pointer ml-auto">
                           Apply
                         </Link>
                       </div>
@@ -633,7 +620,7 @@ export default function DashboardPage() {
                       </Link>
                       <Link
                         to="/interview-session"
-                        className="w-full text-center px-3 py-2 rounded-lg bg-primary text-on-primary hover:bg-[#4338CA] transition-colors font-label-sm text-label-sm cursor-pointer"
+                        className="w-full text-center px-3 py-2 rounded-lg text-white bg-gradient-to-r from-[#EC4899] to-[#FF8A3D] hover:opacity-90 transition-all font-label-sm text-label-sm cursor-pointer"
                       >
                         Practice Again
                       </Link>
@@ -646,7 +633,7 @@ export default function DashboardPage() {
                     </p>
                     <Link
                       to="/interview-session"
-                      className="bg-primary hover:bg-[#4338CA] text-on-primary px-5 py-2.5 rounded-lg font-label-md text-label-md transition-colors shadow-sm inline-flex items-center gap-2"
+                      className="text-white px-5 py-2.5 rounded-lg font-label-md text-label-md transition-all shadow-sm inline-flex items-center gap-2 bg-gradient-to-r from-[#EC4899] to-[#FF8A3D] hover:opacity-90"
                     >
                       <span className="material-symbols-outlined text-[18px]">mic</span>
                       Start Mock Interview
@@ -684,7 +671,7 @@ export default function DashboardPage() {
                   </div>
                   <Link
                     to="/interview-evaluation"
-                    className="w-full block text-center bg-gradient-to-r from-primary to-secondary text-on-primary py-2 rounded-lg font-label-md text-label-md hover:opacity-90 transition-opacity shadow-sm"
+                    className="w-full block text-center bg-gradient-to-r from-[#EC4899] to-[#FF8A3D] text-white py-2 rounded-lg font-label-md text-label-md hover:opacity-95 transition-opacity shadow-md font-bold"
                   >
                     View Skill Gaps →
                   </Link>
@@ -723,7 +710,7 @@ export default function DashboardPage() {
       {/* ── Floating AI Assistant Button ───────────────────────────── */}
       <button
         onClick={() => setChatOpen((v) => !v)}
-        className="fixed bottom-24 md:bottom-8 right-6 z-40 flex items-center gap-2 bg-gradient-to-r from-primary to-secondary text-on-primary px-4 py-3 rounded-full shadow-lg hover:opacity-90 transition-opacity cursor-pointer font-label-md text-label-md"
+        className="fixed bottom-24 md:bottom-8 right-6 z-40 flex items-center gap-2 bg-gradient-to-r from-[#EC4899] to-[#FF8A3D] text-white px-4 py-3 rounded-full shadow-xl hover:opacity-95 transition-opacity cursor-pointer font-label-md text-label-md font-bold"
         title="AI Career Assistant"
       >
         <span className="material-symbols-outlined icon-filled text-[20px]">smart_toy</span>

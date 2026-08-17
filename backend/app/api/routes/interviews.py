@@ -187,6 +187,25 @@ def get_readiness_alias(
     return get_readiness(db, current_user_id)
 
 
+# ── 2.1. Get Interview History ────────────────────────────────────────────────
+@router.get(
+    "/history",
+    response_model=List[InterviewSessionSummaryResponse],
+    summary="Get user's mock interview history",
+)
+def get_interview_history(
+    db: Session = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id),
+):
+    sessions = (
+        db.query(InterviewSession)
+        .filter(InterviewSession.user_id == current_user_id)
+        .order_by(InterviewSession.created_at.desc())
+        .all()
+    )
+    return sessions
+
+
 # ── 3. Get Session Details ───────────────────────────────────────────────────
 @router.get(
     "/{session_id}",

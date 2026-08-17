@@ -11,6 +11,14 @@ from pydantic import BaseModel, EmailStr
 class UserBase(BaseModel):
     email: EmailStr
     full_name: str | None = None
+    avatar_url: str | None = None
+    title: str | None = None
+    phone: str | None = None
+    location: str | None = None
+    bio: str | None = None
+    linkedin: str | None = None
+    github: str | None = None
+    portfolio: str | None = None
 
 
 class UserCreate(UserBase):
@@ -21,6 +29,14 @@ class UserCreate(UserBase):
 class UserUpdate(BaseModel):
     """Used when updating user profile."""
     full_name: str | None = None
+    avatar_url: str | None = None
+    title: str | None = None
+    phone: str | None = None
+    location: str | None = None
+    bio: str | None = None
+    linkedin: str | None = None
+    github: str | None = None
+    portfolio: str | None = None
 
 
 class UserResponse(UserBase):

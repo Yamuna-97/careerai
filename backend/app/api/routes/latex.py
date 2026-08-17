@@ -1,22 +1,18 @@
 """
 app/api/routes/latex.py
 ────────────────────────
-FastAPI endpoints for Overleaf-style LaTeX Resume Editor.
-Supports compilation sandbox, templates, AI editing, and DB project storage.
+FastAPI endpoints for Overleaf-style LaTeX Resume Editor and Template Compilation.
+Supports compilation sandbox, official templates (1-9), data binding, AI editing, and project storage.
 """
 
 import base64
 import uuid
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.core.database import get_db
-from app.core.security import get_current_user_id
-from app.models.latex import LatexProject, LatexProjectFile
-from app.services import latex_compile_service, latex_ai_service
+from app.services import latex_compile_service, latex_ai_service, latex_template_service
 
 router = APIRouter()
 
@@ -25,6 +21,11 @@ router = APIRouter()
 
 class CompileRequest(BaseModel):
     files: Dict[str, str]  # filename -> code string (or Base64 binary)
+    compiler: Optional[str] = "pdflatex"
+
+
+class RenderTemplateRequest(BaseModel):
+    resume_data: Dict[str, Any]
     compiler: Optional[str] = "pdflatex"
 
 
@@ -47,14 +48,7 @@ class AIFixRequest(BaseModel):
     line_number: int
 
 
-class ProjectCreateRequest(BaseModel):
-    name: str
-    compiler: Optional[str] = "pdflatex"
-    initial_latex: Optional[str] = None
-
-
-class ProjectSaveRequest(BaseModel):
-    files: Dict[str, str]  # filename -> content
+from app.core.security import get_current_user_id
 
 
 # ── Endpoints ──────────────────────────────────────────────────────────────────
@@ -71,13 +65,12 @@ def compile_latex(request: CompileRequest):
         compiler=request.compiler
     )
 
-    response_data = {
+    return {
         "success": success,
         "logs": logs,
         "errors": errors,
         "pdf": base64.b64encode(pdf_bytes).decode("utf-8") if success else None
     }
-    return response_data
 
 
 # 2. CareerAI Resume Data -> LaTeX Generator
@@ -87,18 +80,21 @@ def generate_latex(request: GenerateRequest, current_user_id: str = Depends(get_
     try:
         from app.core.config import settings
         if not settings.GEMINI_API_KEY:
-            # Return template fallback
+            # Generate clean LaTeX without hardcoded mock data
+            p = request.resume_data.get("personal", {})
+            name = latex_template_service.escape_latex(p.get("fullName") or "Your Name")
+            summary = latex_template_service.escape_latex(request.resume_data.get("summary") or "")
+            summary_section = f"\\section*{{Professional Summary}}\n{summary}\n" if summary else ""
             return {
                 "success": True,
-                "demo_mode": True,
                 "latex_code": (
                     "\\documentclass{article}\n"
+                    "\\usepackage[utf8]{inputenc}\n"
                     "\\begin{document}\n"
                     "\\begin{center}\n"
-                    f"{{\\LARGE {request.resume_data.get('personal', {}).get('fullName', 'Jane Doe')}}}\n"
+                    f"{{\\LARGE \\textbf{{{name}}}}}\n"
                     "\\end{center}\n"
-                    "\\section*{Summary}\n"
-                    f"{request.resume_data.get('summary', 'AI-generated resume summary.')}\n"
+                    f"{summary_section}"
                     "\\end{document}"
                 )
             }
@@ -168,211 +164,78 @@ def ai_fix_error(request: AIFixRequest, current_user_id: str = Depends(get_curre
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# 6. Database: List Projects
-@router.get("/projects", summary="List all saved LaTeX projects")
-def list_projects(db: Session = Depends(get_db), current_user_id: str = Depends(get_current_user_id)):
-    projects = db.query(LatexProject).filter(LatexProject.user_id == current_user_id).all()
-    return {
-        "success": True,
-        "projects": [
-            {
-                "id": p.id,
-                "name": p.name,
-                "compiler": p.compiler,
-                "created_at": p.created_at,
-                "updated_at": p.updated_at
-            }
-            for p in projects
-        ]
-    }
 
-
-# 7. Database: Create Project
-@router.post("/projects", summary="Create a new LaTeX project")
-def create_project(request: ProjectCreateRequest, db: Session = Depends(get_db), current_user_id: str = Depends(get_current_user_id)):
-    project_id = str(uuid.uuid4())
-    
-    # Create project entry
-    project = LatexProject(
-        id=project_id,
-        user_id=current_user_id,
-        name=request.name,
-        compiler=request.compiler
-    )
-    db.add(project)
-    
-    # Write initial cv.tex
-    default_latex = request.initial_latex or (
-        "\\documentclass{article}\n"
-        "\\usepackage[utf8]{inputenc}\n\n"
-        "\\begin{document}\n\n"
-        "\\begin{center}\n"
-        f"{{\\LARGE \\textbf{{{current_user_id.capitalize()}}}}}\n"
-        "\\end{center}\n\n"
-        "\\section*{Professional Summary}\n"
-        "Experienced engineer seeking ML opportunities.\n\n"
-        "\\section*{Education}\n"
-        "Kongu Engineering College -- B.Tech AI & Data Science (2024-2028)\n\n"
-        "\\end{document}\n"
-    )
-
-    file_id = str(uuid.uuid4())
-    tex_file = LatexProjectFile(
-        id=file_id,
-        project_id=project_id,
-        file_name="cv.tex",
-        content=default_latex
-    )
-    db.add(tex_file)
-    db.commit()
-
-    return {"success": True, "project_id": project_id, "name": request.name}
-
-
-# 8. Database: Load Project Files
-@router.get("/projects/{project_id}", summary="Load all files in a LaTeX project")
-def get_project_files(project_id: str, db: Session = Depends(get_db), current_user_id: str = Depends(get_current_user_id)):
-    project = db.query(LatexProject).filter(
-        LatexProject.id == project_id,
-        LatexProject.user_id == current_user_id
-    ).first()
-    
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found.")
-
-    files = db.query(LatexProjectFile).filter(LatexProjectFile.project_id == project_id).all()
-    return {
-        "success": True,
-        "project": {
-            "id": project.id,
-            "name": project.name,
-            "compiler": project.compiler
-        },
-        "files": {f.file_name: f.content for f in files}
-    }
-
-
-# 9. Database: Save Project Files
-@router.put("/projects/{project_id}", summary="Update files inside a LaTeX project")
-def save_project_files(
-    project_id: str,
-    request: ProjectSaveRequest,
-    db: Session = Depends(get_db),
-    current_user_id: str = Depends(get_current_user_id)
-):
-    project = db.query(LatexProject).filter(
-        LatexProject.id == project_id,
-        LatexProject.user_id == current_user_id
-    ).first()
-    
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found.")
-
-    # Remove existing files of the project first
-    db.query(LatexProjectFile).filter(LatexProjectFile.project_id == project_id).delete()
-
-    # Re-insert files
-    for name, content in request.files.items():
-        tex_file = LatexProjectFile(
-            id=str(uuid.uuid4()),
-            project_id=project_id,
-            file_name=name,
-            content=content
-        )
-        db.add(tex_file)
-
-    project.updated_at = __import__("datetime").datetime.utcnow()
-    db.commit()
-
-    return {"success": True}
-
-
-# 10. Database: Delete Project
-@router.delete("/projects/{project_id}", summary="Delete a LaTeX project")
-def delete_project(project_id: str, db: Session = Depends(get_db), current_user_id: str = Depends(get_current_user_id)):
-    project = db.query(LatexProject).filter(
-        LatexProject.id == project_id,
-        LatexProject.user_id == current_user_id
-    ).first()
-    
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found.")
-
-    db.delete(project)
-    db.commit()
-    return {"success": True}
-
-
-# 11. Templates: List Pre-installed Templates
-LATEX_TEMPLATES_METADATA = [
-    {"id": "1", "name": "AltaCV Template", "description": "Elegant two-column layout with sidebar icons."},
-    {"id": "2", "name": "CurVe CV Template", "description": "Customizable template with curriculum vitae style."},
-    {"id": "3", "name": "MBZUAI Resume Template", "description": "Professional clean layout from MBZUAI university."},
-    {"id": "4", "name": "Harshibar's Resume Template", "description": "Modern minimalist single-column developer layout."},
-    {"id": "5", "name": "SixtySecondsCV Template", "description": "Vibrant and dense modern multi-page layout."},
-    {"id": "6", "name": "IIIT Vadodara Resume", "description": "Structured single-column academic/placement style."},
-    {"id": "7", "name": "Intern Fair CV Template", "description": "Highly structured and clear layout for student placements."},
-    {"id": "8", "name": "CV Template Olico", "description": "Professional single-column clean timeline layout."},
-    {"id": "9", "name": "Two-Column One-Page CV", "description": "Highly compact two-column timeline design based on tccv."}
-]
-
-
-@router.get("/templates", summary="List pre-installed LaTeX templates")
+# 11. Templates: List Pre-installed Official Templates
+@router.get("/templates", summary="List pre-installed official LaTeX templates (1-9)")
 def list_latex_templates():
-    """Return list of available LaTeX templates."""
-    return LATEX_TEMPLATES_METADATA
+    """Return metadata for all 9 official LaTeX resume templates."""
+    return latex_template_service.TEMPLATES_METADATA
 
 
+# 12. Templates: Get Master Files of a Template
 @router.get("/templates/{template_id}", summary="Get all files of a specific LaTeX template")
 def get_latex_template_files(template_id: str):
     """Retrieve all files in a template directory, with main tex mapping to cv.tex."""
-    import os
-    import base64
+    try:
+        files = latex_template_service.read_master_template_files(template_id)
+        return {"success": True, "files": files}
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Template {template_id} not found.")
 
-    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    templates_dir = os.path.join(base_dir, "templates", template_id)
 
-    if not os.path.exists(templates_dir) or not os.path.isdir(templates_dir):
-        raise HTTPException(status_code=404, detail="Template not found.")
+# 13. Templates: Get Compiled PDF of Original Master Template (Preview)
+@router.get("/templates/{template_id}/preview", summary="Get compiled PDF of original template")
+def get_template_preview_pdf(template_id: str):
+    """
+    Compiles the original template files as-is from the disk and returns the PDF.
+    """
+    try:
+        project_files = latex_template_service.get_original_template_files(template_id)
+        
+        # Determine compiler engine from TEMPLATES_METADATA
+        meta = next((m for m in latex_template_service.TEMPLATES_METADATA if m["id"] == str(template_id)), None)
+        compiler = meta.get("engine", "pdflatex") if meta else "pdflatex"
+        
+        success, pdf_bytes, logs, errors = latex_compile_service.compile_latex(
+            files=project_files,
+            compiler=compiler
+        )
+        
+        if not success:
+            raise HTTPException(status_code=500, detail=f"Compilation failed: {errors or logs}")
+            
+        return {
+            "success": True,
+            "pdf": base64.b64encode(pdf_bytes).decode("utf-8")
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-    MAIN_TEX_FILES = {
-        "1": "sample.tex",
-        "2": "cv-llt.tex",
-        "3": "MBZUAI Resume template.tex",
-        "4": "main.tex",
-        "5": "sixtysecondscv.tex",
-        "6": "main.tex",
-        "7": "main.tex",
-        "8": "CVmain.tex",
-        "9": "main.tex",
-    }
 
-    main_tex = MAIN_TEX_FILES.get(template_id)
-    files = {}
+# 14. Templates: Render & Compile Template with Resume Data
+@router.post("/templates/{template_id}/render", summary="Render template with structured resume data and compile PDF")
+def render_and_compile_template(template_id: str, request: RenderTemplateRequest):
+    """
+    Renders structured resume data into template files and compiles to PDF.
+    """
+    try:
+        project_files = latex_template_service.render_resume_to_latex(
+            template_id=template_id,
+            raw_data=request.resume_data
+        )
 
-    for root, _, filenames in os.walk(templates_dir):
-        for name in filenames:
-            file_path = os.path.join(root, name)
-            rel_path = os.path.relpath(file_path, templates_dir)
-            rel_path = rel_path.replace("\\", "/")
+        success, pdf_bytes, logs, errors = latex_compile_service.compile_latex(
+            files=project_files,
+            compiler=request.compiler or "pdflatex"
+        )
 
-            # Map the main TeX file of this template to cv.tex
-            mapped_name = "cv.tex" if rel_path == main_tex else rel_path
-
-            if name.lower().endswith((".png", ".jpg", ".jpeg", ".pdf")):
-                try:
-                    with open(file_path, "rb") as f:
-                        content = base64.b64encode(f.read()).decode("utf-8")
-                except Exception as e:
-                    raise HTTPException(status_code=500, detail=f"Failed to read asset {name}: {str(e)}")
-            else:
-                try:
-                    with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                        content = f.read()
-                except Exception as e:
-                    raise HTTPException(status_code=500, detail=f"Failed to read file {name}: {str(e)}")
-
-            files[mapped_name] = content
-
-    return {"success": True, "files": files}
-
+        return {
+            "success": success,
+            "template_id": template_id,
+            "files": project_files,
+            "pdf": base64.b64encode(pdf_bytes).decode("utf-8") if success else None,
+            "logs": logs,
+            "errors": errors
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

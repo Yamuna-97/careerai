@@ -5,45 +5,27 @@ import apiClient from '../api/client';
 
 // ── Default LaTeX templates ───────────────────────────────────────────────────
 const LATEX_TEMPLATES = {
-  "ATS Resume": `% ATS Resume Template
+  "Standard Resume": `% Standard Resume Template
 \\documentclass[11pt]{article}
 \\usepackage[utf8]{inputenc}
 \\usepackage[margin=1in]{geometry}
 \\usepackage{enumitem}
 \\begin{document}
 \\begin{center}
-  {\\LARGE \\textbf{Jane Doe}} \\\\[4pt]
-  \\small jane@example.com $\\mid$ +1 555-123-4567 $\\mid$ San Francisco, CA
+  {\\LARGE \\textbf{Your Name}} \\\\[4pt]
+  \\small email@example.com $\\mid$ +1 555-000-0000 $\\mid$ City, Country
 \\end{center}
 \\section*{Professional Summary}
-Results-oriented software developer with 5+ years of experience building scalable backend APIs.
+Driven professional with expertise in your field.
 \\section*{Experience}
-\\textbf{TechCorp Solutions} \\hfill Lead Engineer (2021 -- Present) \\\\
+\\textbf{Company Name} \\hfill Job Title (2020 -- Present) \\\\
 \\begin{itemize}[noitemsep,topsep=2pt]
-  \\item Architected data pipeline services that processed 2M+ active client records.
-  \\item Optimized query speeds by 30\\% utilizing database caching tools.
+  \\item Accomplishment or key responsibility.
 \\end{itemize}
 \\section*{Education}
-\\textbf{B.Sc. Computer Science} \\hfill State University (2014 -- 2018)
+\\textbf{Degree Name} \\hfill University Name (2016 -- 2020)
 \\section*{Skills}
-Python, SQL, FastAPI, React, Docker, AWS
-\\end{document}`,
-
-  "Software Engineer": `% Software Engineer Resume
-\\documentclass[11pt]{article}
-\\usepackage[utf8]{inputenc}
-\\usepackage[margin=0.8in]{geometry}
-\\begin{document}
-\\begin{center}
-  {\\LARGE \\textbf{Yamuna}} \\\\[4pt]
-  Chennai, India $\\mid$ github.com/yamuna-97 $\\mid$ yamuna.dev
-\\end{center}
-\\section*{Technical Skills}
-\\textbf{Languages:} Python, SQL, C++, JavaScript \\\\
-\\textbf{Frameworks:} React, FastAPI, TensorFlow, PyTorch
-\\section*{Projects}
-\\textbf{CareerAI Platform} \\hfill \\textit{React, FastAPI, Supabase} \\\\
-Built mock interview simulator and Overleaf-style LaTeX editor.
+Skill 1, Skill 2, Skill 3
 \\end{document}`,
 
   "Academic CV": `% Academic CV Template
@@ -51,13 +33,13 @@ Built mock interview simulator and Overleaf-style LaTeX editor.
 \\usepackage[utf8]{inputenc}
 \\begin{document}
 \\begin{center}
-  {\\LARGE \\textbf{Dr. Alex Smith}} \\\\[4pt]
-  Department of Computer Science $\\mid$ University of Science
+  {\\LARGE \\textbf{Dr. First Last}} \\\\[4pt]
+  Department $\\mid$ Institution
 \\end{center}
 \\section*{Education}
-\\textbf{Ph.D. Computer Science} \\hfill University of Science (2018 -- 2022)
+\\textbf{Ph.D. Subject} \\hfill University Name (Year)
 \\section*{Publications}
-Smith, A. \\textit{Advanced Neural Architectures.} Journal of AI Research, 2023.
+Last, F. \\textit{Title of Publication.} Journal Name, Year.
 \\end{document}`
 };
 
@@ -70,23 +52,23 @@ const DEFAULT_TEX = `% CareerAI LaTeX Editor — Overleaf-Style
 \\begin{document}
 
 \\begin{center}
-  {\\LARGE \\textbf{Jane Doe}} \\\\[4pt]
-  \\small jane.doe@example.com $\\mid$ +1 (555) 123-4567 $\\mid$ San Francisco, CA
+  {\\LARGE \\textbf{Your Name}} \\\\[4pt]
+  \\small email@example.com $\\mid$ +1 (555) 000-0000 $\\mid$ City, Country
 \\end{center}
 
 \\section*{Professional Summary}
-Senior Product Designer with 6+ years of experience transforming complex problems into intuitive SaaS dashboards.
+Add your career objective or professional summary here.
 
 \\section*{Professional Experience}
-\\textbf{TechCorp Solutions} \\hfill Lead Designer (2021 -- Present) \\\\
+\\textbf{Company Name} \\hfill (Dates) \\\\
+Role Title \\\\
 \\begin{itemize}[noitemsep,topsep=2pt]
-  \\item Spearheaded the redesign of core analytics dashboard, boosting user engagement by 25\\%.
-  \\item Maintained a comprehensive design system utilized by 50+ engineers.
+  \\item Key achievement or responsibility.
 \\end{itemize}
 
 \\section*{Technical Skills}
-\\textbf{Design:} UI/UX, Wireframing, Figma, Design Systems \\\\
-\\textbf{Research:} Usability Testing, Personas, A/B Testing
+\\textbf{Languages:} Python, JavaScript, SQL \\\\
+\\textbf{Frameworks & Tools:} React, FastAPI, Git, Docker
 
 \\end{document}`;
 
@@ -274,10 +256,34 @@ export default function LaTeXEditorPage() {
   const handleLoadTemplate = async (templateId) => {
     try {
       setCompileStatus('compiling');
-      const res = await apiClient.get(`/latex/templates/${templateId}`);
-      if (res.data && res.data.files) {
-        setFiles(res.data.files);
-        const firstFile = Object.keys(res.data.files).includes('cv.tex') ? 'cv.tex' : Object.keys(res.data.files)[0];
+      let loadedFiles = null;
+
+      // Check if user has active resume data to render
+      const savedData = localStorage.getItem('careerai_resume_data');
+      if (savedData) {
+        try {
+          const parsed = JSON.parse(savedData);
+          const renderRes = await apiClient.post(`/latex/templates/${templateId}/render`, {
+            resume_data: parsed
+          });
+          if (renderRes.data && renderRes.data.files) {
+            loadedFiles = renderRes.data.files;
+          }
+        } catch (err) {
+          console.warn('Render with user data failed, falling back to master files:', err);
+        }
+      }
+
+      if (!loadedFiles) {
+        const res = await apiClient.get(`/latex/templates/${templateId}`);
+        if (res.data && res.data.files) {
+          loadedFiles = res.data.files;
+        }
+      }
+
+      if (loadedFiles) {
+        setFiles(loadedFiles);
+        const firstFile = Object.keys(loadedFiles).includes('cv.tex') ? 'cv.tex' : Object.keys(loadedFiles)[0];
         setActiveFile(firstFile);
         setShowTemplatesMenu(false);
         setTimeout(() => handleCompile(), 100);

@@ -37,7 +37,8 @@ export default function App() {
           <Route path="/resume/ai-studio/video" element={<ResumeAIStudioPage />} />
           <Route path="/resume/ai-studio/audio" element={<ResumeAIStudioPage />} />
           <Route path="/resume/templates" element={<ResumeTemplatesPage />} />
-          <Route path="/resume/latex-editor" element={<LaTeXEditorPage />} />
+          <Route path="/resume/latex-editor" element={<Navigate to="/resume/builder" replace />} />
+          <Route path="/resume/latex" element={<Navigate to="/resume/builder" replace />} />
           <Route path="/resume-editor" element={<ResumeEditorPage />} />
 
           {/* Interview Mock module */}

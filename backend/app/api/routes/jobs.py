@@ -29,14 +29,35 @@ def _get_user_id(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
     db: Session = Depends(get_db)
 ) -> str:
-    if not credentials or not credentials.credentials:
-        return "local_user"
+    user_id = "local_user"
+    email = "local_user@careerai.com"
+    full_name = "Local User"
+    
+    if credentials and credentials.credentials:
+        try:
+            from app.core.security import _verify_token
+            payload = _verify_token(credentials.credentials)
+            if payload.get("sub"):
+                user_id = payload.get("sub")
+                email = payload.get("email") or f"{user_id}@careerai.com"
+                user_metadata = payload.get("user_metadata", {})
+                full_name = user_metadata.get("full_name") or (email.split("@")[0].capitalize() if email else "User")
+        except BaseException:
+            pass
+
+    # Ensure user exists in users table to prevent Foreign Key constraints violation
+    from app.models.user import User
     try:
-        from app.core.security import _verify_token
-        payload = _verify_token(credentials.credentials)
-        return payload.get("sub") or "local_user"
-    except BaseException:
-        return "local_user"
+        existing = db.query(User).filter(User.id == user_id).first()
+        if not existing:
+            new_user = User(id=user_id, email=email, full_name=full_name)
+            db.add(new_user)
+            db.commit()
+    except Exception as e:
+        print(f"Error ensuring user exists in jobs.py: {e}")
+        db.rollback()
+
+    return user_id
 
 
 def format_salary_display(job: dict) -> Optional[str]:
@@ -157,12 +178,12 @@ class CompanySalaryRequest(BaseModel):
 
 class JobSaveRequest(BaseModel):
     id: str
-    source: str
-    title: str
-    company: str
-    location: str
-    description: str
-    url: str
+    source: Optional[str] = "JSearch"
+    title: Optional[str] = "Untitled Position"
+    company: Optional[str] = "Unknown Company"
+    location: Optional[str] = "Remote"
+    description: Optional[str] = ""
+    url: Optional[str] = ""
     salary_min: Optional[float] = None
     salary_max: Optional[float] = None
     salary_display: Optional[str] = ""
@@ -703,23 +724,23 @@ def save_job(job_id: str, data: JobSaveRequest, db: Session = Depends(get_db), c
         user_id=current_user_id,
         profile_id=profile.id if profile else None,
         external_job_id=data.id,
-        source=data.source,
-        title=data.title,
-        company=data.company,
-        location=data.location,
-        description=data.description,
-        url=data.url,
+        source=data.source or "JSearch",
+        title=data.title or "Untitled Position",
+        company=data.company or "Unknown Company",
+        location=data.location or "Remote",
+        description=data.description or "",
+        url=data.url or "",
         salary_min=data.salary_min,
         salary_max=data.salary_max,
-        salary_display=data.salary_display,
-        employment_type=data.employment_type,
-        work_mode=data.work_mode,
-        category=data.category,
-        posted_date=data.posted_date,
-        match_score=data.match_score,
-        matched_skills=data.matched_skills,
-        missing_skills=data.missing_skills,
-        match_reasons=data.match_reasons
+        salary_display=data.salary_display or "",
+        employment_type=data.employment_type or "",
+        work_mode=data.work_mode or "",
+        category=data.category or "",
+        posted_date=data.posted_date or "",
+        match_score=data.match_score or 0.0,
+        matched_skills=data.matched_skills or [],
+        missing_skills=data.missing_skills or [],
+        match_reasons=data.match_reasons or []
     )
     db.add(saved)
 

@@ -1,11 +1,13 @@
 """
 app/api/routes/templates.py
 ────────────────────────────
-Resume template listing endpoint.
+Resume template listing endpoint using official templates (1-9).
 """
 
+from typing import List, Optional
 from fastapi import APIRouter
 from pydantic import BaseModel
+from app.services.latex_template_service import TEMPLATES_METADATA
 
 router = APIRouter()
 
@@ -13,23 +15,18 @@ router = APIRouter()
 class TemplateInfo(BaseModel):
     id: str
     name: str
+    category: Optional[str] = "General"
+    compiler: Optional[str] = "pdflatex"
     description: str
     preview_color: str
-
-
-AVAILABLE_TEMPLATES = [
-    TemplateInfo(id="modern",       name="Modern",       description="Clean and contemporary design with a bold header and accent colors.", preview_color="#3525cd"),
-    TemplateInfo(id="professional", name="Professional", description="Classic and traditional layout suitable for corporate roles.",          preview_color="#1f2937"),
-    TemplateInfo(id="minimal",      name="Minimal",      description="Simple and elegant with generous white space.",                         preview_color="#6b7280"),
-    TemplateInfo(id="creative",     name="Creative",     description="Unique and expressive — great for design and tech roles.",              preview_color="#712ae2"),
-]
+    main_tex: Optional[str] = "cv.tex"
 
 
 @router.get(
     "",
-    response_model=list[TemplateInfo],
-    summary="List available resume templates",
+    response_model=List[TemplateInfo],
+    summary="List available official resume templates",
 )
 def list_templates():
-    """Return all available resume templates."""
-    return AVAILABLE_TEMPLATES
+    """Return all available official resume templates (1 through 9)."""
+    return TEMPLATES_METADATA

@@ -2,12 +2,12 @@
 app/models/user.py
 ───────────────────
 User SQLAlchemy model.
-Supabase Auth manages passwords — we only store profile data here.
+Supabase Auth manages passwords — we store profile data here.
 """
 
 import uuid
 from datetime import datetime
-from sqlalchemy import String, DateTime, func
+from sqlalchemy import String, DateTime, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 
@@ -21,6 +21,14 @@ class User(Base):
     )
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    avatar_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    location: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    bio: Mapped[str | None] = mapped_column(Text, nullable=True)
+    linkedin: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    github: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    portfolio: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # Timestamps — automatically set by the database
     created_at: Mapped[datetime] = mapped_column(

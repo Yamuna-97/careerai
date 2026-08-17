@@ -102,7 +102,7 @@ export default function ResumeHubPage() {
       </div>
 
       {/* Three Workflows Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
 
         {/* Card 1: Manual Builder */}
         <div className="bg-surface rounded-xl p-6 border border-outline-variant/40 shadow-sm flex flex-col justify-between hover:shadow-md transition-all group">
@@ -110,7 +110,7 @@ export default function ResumeHubPage() {
             <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center text-primary group-hover:scale-105 transition-transform">
               <span className="material-symbols-outlined text-2xl icon-filled">edit_note</span>
             </div>
-            <h3 className="font-headline-sm text-headline-sm font-bold text-on-surface">Manual Builder</h3>
+            <h3 className="font-headline-sm text-headline-sm font-bold text-on-surface">Resume Editor</h3>
             <p className="font-body-sm text-xs text-on-surface-variant leading-relaxed">
               Enter your details step-by-step using our structured forms. Ideal for adding fine-grained bullet points, custom certificates, and manual refinements.
             </p>
@@ -119,7 +119,7 @@ export default function ResumeHubPage() {
             to="/resume/builder"
             className="w-full mt-6 bg-surface-container-high hover:bg-surface-container text-on-surface text-center py-2.5 rounded-lg font-label-md text-xs font-bold transition-colors"
           >
-            Open Manual Editor
+            Open Resume Editor
           </Link>
         </div>
 
@@ -151,33 +151,14 @@ export default function ResumeHubPage() {
             </div>
             <h3 className="font-headline-sm text-headline-sm font-bold text-on-surface">Browse Templates</h3>
             <p className="font-body-sm text-xs text-on-surface-variant leading-relaxed">
-              Browse 20+ professional layouts designed for technology, business, academic, and creative fields. Supports instant previewing with your live data.
+              Browse 9+ professional layouts designed for technology, business, academic, and creative fields. Supports instant previewing with your live data.
             </p>
           </div>
           <Link
             to="/resume/templates"
             className="w-full mt-6 bg-surface-container-high hover:bg-surface-container text-on-surface text-center py-2.5 rounded-lg font-label-md text-xs font-bold transition-colors"
           >
-            View 20+ Designs
-          </Link>
-        </div>
-
-        {/* Card 4: LaTeX Editor */}
-        <div className="bg-surface rounded-xl p-6 border border-outline-variant/40 shadow-sm flex flex-col justify-between hover:shadow-md transition-all group">
-          <div className="space-y-3">
-            <div className="w-12 h-12 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-600 group-hover:scale-105 transition-transform">
-              <span className="material-symbols-outlined text-2xl icon-filled">code</span>
-            </div>
-            <h3 className="font-headline-sm text-headline-sm font-bold text-on-surface">LaTeX Editor</h3>
-            <p className="font-body-sm text-xs text-on-surface-variant leading-relaxed">
-              Build your resume utilizing source-code based LaTeX compiles. Overleaf-style split layout, templates, logs, and Gemini debugging fixes.
-            </p>
-          </div>
-          <Link
-            to="/resume/latex-editor"
-            className="w-full mt-6 bg-surface-container-high hover:bg-surface-container text-on-surface text-center py-2.5 rounded-lg font-label-md text-xs font-bold transition-colors"
-          >
-            Open LaTeX Editor
+            View Templates
           </Link>
         </div>
 

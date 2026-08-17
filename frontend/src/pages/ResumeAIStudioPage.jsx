@@ -710,15 +710,31 @@ export default function ResumeAIStudioPage() {
     }
 
     const handleApply = () => {
+      let activeApplied = null;
       if (tool === "tailor" && tailoredResume) {
-        setResumeData(tailoredResume);
-        sessionStorage.setItem("careerai_ai_session", JSON.stringify(tailoredResume));
+        activeApplied = tailoredResume;
       } else if (tool === "improve" && data.improved_resume_data) {
-        setResumeData(data.improved_resume_data);
-        sessionStorage.setItem("careerai_ai_session", JSON.stringify(data.improved_resume_data));
+        activeApplied = data.improved_resume_data;
       } else if (tool === "generate" && data.resume_data) {
-        setResumeData(data.resume_data);
-        sessionStorage.setItem("careerai_ai_session", JSON.stringify(data.resume_data));
+        activeApplied = data.resume_data;
+      }
+
+      if (activeApplied) {
+        setResumeData(activeApplied);
+        sessionStorage.setItem("careerai_ai_session", JSON.stringify(activeApplied));
+        localStorage.setItem("careerai_resume_data", JSON.stringify(activeApplied));
+
+        // Save to recent saved resumes list
+        const saved = JSON.parse(localStorage.getItem('careerai_saved_resumes') || '[]');
+        const entry = {
+          id: Date.now(),
+          savedAt: new Date().toISOString(),
+          template: localStorage.getItem('careerai_template_id') || '4',
+          data: activeApplied,
+        };
+        localStorage.setItem('careerai_saved_resumes', JSON.stringify([entry, ...saved].slice(0, 10)));
+
+        // Shift directly to Resume Editor
         navigate("/resume/builder");
         return;
       }
@@ -1782,15 +1798,15 @@ function ResumeAIResultLayout({
         {tailoredResume && (
           <div className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm flex items-center justify-between gap-4">
             <div>
-              <p className="text-[10px] text-gray-400 font-bold uppercase">Ready to Use?</p>
-              <p className="text-xs text-gray-500">Apply this tailored layout to your builder profile.</p>
+              <p className="text-[10px] text-gray-400 font-bold uppercase">Ready to Edit?</p>
+              <p className="text-xs text-gray-500">Apply this tailored layout and open in Resume Editor.</p>
             </div>
             <button
               onClick={onApply}
               className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl text-xs font-bold hover:opacity-90 transition-opacity shadow-md cursor-pointer animate-pulse"
             >
-              <span className="material-symbols-outlined text-sm">check_circle</span>
-              Apply Tailored Resume
+              <span className="material-symbols-outlined text-sm">edit_note</span>
+              Open in Resume Editor
             </button>
           </div>
         )}

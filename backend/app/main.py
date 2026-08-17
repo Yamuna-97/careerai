@@ -27,10 +27,30 @@ async def lifespan(app: FastAPI):
     
     # Auto-create tables for local testing
     try:
-        from app.core.database import Base, engine
+        from app.core.database import Base, engine, text
         import app.models
         Base.metadata.create_all(bind=engine)
-        print("[*] Database tables successfully verified/created.")
+        
+        # Ensure new user profile columns exist on existing tables
+        with engine.connect() as conn:
+            user_cols = [
+                ("avatar_url", "TEXT"),
+                ("title", "VARCHAR(255)"),
+                ("phone", "VARCHAR(50)"),
+                ("location", "VARCHAR(255)"),
+                ("bio", "TEXT"),
+                ("linkedin", "VARCHAR(255)"),
+                ("github", "VARCHAR(255)"),
+                ("portfolio", "VARCHAR(255)")
+            ]
+            for col_name, col_type in user_cols:
+                try:
+                    conn.execute(text(f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
+                    conn.commit()
+                except Exception:
+                    pass
+
+        print("[*] Database tables and profile schema successfully verified/created.")
     except Exception as e:
         print(f"[!] Error auto-creating database tables: {e}")
         

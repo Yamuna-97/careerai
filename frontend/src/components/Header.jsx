@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../utils/supabase';
 import { SlideTabs } from './ui/slide-tabs';
-import { Brain, Search, Bell, User, Settings, LogOut, ChevronDown, Menu } from 'lucide-react';
+import { Brain, User, LogOut, ChevronDown, Menu } from 'lucide-react';
 import apiClient from '../api/client';
+import ProfileModal from './ProfileModal';
 
 export default function Header({ onToggleMobileSidebar }) {
   const navigate = useNavigate();
@@ -12,6 +13,7 @@ export default function Header({ onToggleMobileSidebar }) {
   const [profile, setProfile] = useState(null);
   const [roleTitle, setRoleTitle] = useState('Career Profile');
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
   useEffect(() => {
     async function loadUserProfile() {
@@ -21,8 +23,11 @@ export default function Header({ onToggleMobileSidebar }) {
           apiClient.get('/jobs/profile')
         ]);
 
-        if (userRes.status === 'fulfilled') {
+        if (userRes.status === 'fulfilled' && userRes.value?.data) {
           setProfile(userRes.value.data);
+          if (userRes.value.data.title) {
+            setRoleTitle(userRes.value.data.title);
+          }
         }
 
         if (jobRes.status === 'fulfilled') {
@@ -39,6 +44,16 @@ export default function Header({ onToggleMobileSidebar }) {
     }
 
     loadUserProfile();
+
+    // Listen for custom profile update events
+    const handleProfileUpdate = (e) => {
+      if (e.detail) {
+        setProfile(prev => ({ ...prev, ...e.detail }));
+        if (e.detail.title) setRoleTitle(e.detail.title);
+      }
+    };
+    window.addEventListener('careerai:profile-updated', handleProfileUpdate);
+    return () => window.removeEventListener('careerai:profile-updated', handleProfileUpdate);
   }, []);
 
   const handleSignOut = async () => {
@@ -46,6 +61,7 @@ export default function Header({ onToggleMobileSidebar }) {
     try {
       await supabase.auth.signOut();
       localStorage.removeItem('token');
+      localStorage.removeItem('careerai_token');
       window.location.href = '/login';
     } catch (err) {
       console.error("Sign out failed:", err);
@@ -82,142 +98,150 @@ export default function Header({ onToggleMobileSidebar }) {
   };
 
   return (
-    <div className="sticky top-0 z-40 w-full flex flex-col shrink-0 bg-surface/90 backdrop-blur-md border-b border-outline-variant">
-      {/* Top Navbar */}
-      <header className="relative flex justify-between items-center px-margin-mobile md:px-margin-desktop h-16 w-full max-w-container-max mx-auto">
-        {/* Brand Logo & Mobile Sidebar Trigger */}
-        <div className="flex items-center gap-3 shrink-0">
-          {onToggleMobileSidebar && (
-            <button
-              onClick={onToggleMobileSidebar}
-              className="md:hidden p-1.5 text-on-surface-variant hover:bg-surface-container rounded-lg"
-              title="Toggle sidebar"
-            >
-              <Menu className="w-5 h-5" />
-            </button>
-          )}
+    <>
+      <div className="sticky top-0 z-40 w-full flex flex-col shrink-0 bg-surface/90 backdrop-blur-md border-b border-outline-variant">
+        {/* Top Navbar */}
+        <header className="relative flex justify-between items-center px-margin-mobile md:px-margin-desktop h-16 w-full max-w-container-max mx-auto">
+          {/* Brand Logo & Mobile Sidebar Trigger */}
+          <div className="flex items-center gap-3 shrink-0">
+            {onToggleMobileSidebar && (
+              <button
+                onClick={onToggleMobileSidebar}
+                className="md:hidden p-1.5 text-on-surface-variant hover:bg-surface-container rounded-lg"
+                title="Toggle sidebar"
+              >
+                <Menu className="w-5 h-5" />
+              </button>
+            )}
 
-          <Link to="/" className="flex items-center gap-2.5 group">
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-r from-[#EC4899] to-[#FF8A3D] text-white flex items-center justify-center shadow-md group-hover:scale-105 transition-all">
-              <Brain className="w-5 h-5 fill-current" />
-            </div>
-            <div className="hidden sm:block text-left">
-              <h1 className="font-headline-sm text-sm font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-[#EC4899] to-[#FF8A3D] tracking-tight">CareerAI</h1>
-              <p className="text-[10px] text-on-surface-variant font-semibold">Smart Platform</p>
-            </div>
-          </Link>
-        </div>
+            <Link to="/" className="flex items-center gap-2.5 group">
+              <div className="w-9 h-9 rounded-lg bg-gradient-to-r from-[#EC4899] to-[#FF8A3D] text-white flex items-center justify-center shadow-md group-hover:scale-105 transition-all">
+                <Brain className="w-5 h-5 fill-current" />
+              </div>
+              <div className="hidden sm:block text-left">
+                <h1 className="font-headline-sm text-sm font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-[#EC4899] to-[#FF8A3D] tracking-tight">CareerAI</h1>
+                <p className="text-[10px] text-on-surface-variant font-semibold">Smart Platform</p>
+              </div>
+            </Link>
+          </div>
 
-        {/* Primary Animated Navigation */}
-        <div className="flex-1 max-w-md mx-auto hidden md:flex justify-center">
-          <SlideTabs
-            tabs={primaryTabs}
-            selected={activeIndex}
-            onSelect={handleSelectTab}
+          {/* Primary Animated Navigation */}
+          <div className="flex-1 max-w-md mx-auto hidden md:flex justify-center">
+            <SlideTabs
+              tabs={primaryTabs}
+              selected={activeIndex}
+              onSelect={handleSelectTab}
+            />
+          </div>
+
+          {/* Right User Area */}
+          <div className="flex items-center gap-3 shrink-0">
+            {/* User profile dropdown */}
+            <div className="relative">
+              <button 
+                onClick={() => setDropdownOpen(!dropdownOpen)} 
+                className="flex items-center gap-2 hover:opacity-85 transition-opacity cursor-pointer text-left focus:outline-none"
+              >
+                {profile ? (
+                  <>
+                    {profile.avatar_url ? (
+                      <img
+                        src={profile.avatar_url}
+                        alt={displayName || 'User'}
+                        className="w-8 h-8 rounded-full object-cover border border-primary shadow-sm select-none"
+                      />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-primary text-on-primary flex items-center justify-center font-bold text-xs select-none">
+                        {initials}
+                      </div>
+                    )}
+                    <div className="hidden lg:flex items-center gap-1">
+                      <div className="text-left">
+                        <p className="font-label-sm text-xs font-semibold text-on-surface leading-tight truncate max-w-[100px]">
+                          {displayName}
+                        </p>
+                        <p className="text-[9px] text-on-surface-variant leading-none mt-0.5 max-w-[90px] truncate">
+                          {roleTitle}
+                        </p>
+                      </div>
+                      <ChevronDown className="w-3.5 h-3.5 text-on-surface-variant shrink-0" />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-8 h-8 rounded-full bg-primary/20 animate-pulse"></div>
+                    <div className="hidden lg:block space-y-1">
+                      <div className="w-16 h-3 bg-outline-variant/30 animate-pulse rounded"></div>
+                      <div className="w-12 h-2 bg-outline-variant/30 animate-pulse rounded"></div>
+                    </div>
+                  </>
+                )}
+              </button>
+
+              {/* Profile Dropdown Menu */}
+              {dropdownOpen && (
+                <div className="absolute right-0 mt-2 w-56 bg-surface border border-outline-variant rounded-xl shadow-lg py-1.5 z-50 animate-fade-in-up">
+                  {profile && (
+                    <div className="px-4 py-2.5 border-b border-outline-variant/50 mb-1 flex items-center gap-2.5">
+                      {profile.avatar_url ? (
+                        <img
+                          src={profile.avatar_url}
+                          alt={profile.full_name || 'User'}
+                          className="w-9 h-9 rounded-full object-cover border border-primary shrink-0"
+                        />
+                      ) : (
+                        <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-[#EC4899] to-[#FF8A3D] text-white font-bold text-xs flex items-center justify-center shrink-0">
+                          {initials}
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="font-label-md text-xs font-bold text-on-surface truncate">{profile.full_name || 'CareerAI User'}</p>
+                        <p className="text-[10px] text-on-surface-variant truncate">{profile.email}</p>
+                      </div>
+                    </div>
+                  )}
+                  <button
+                    onClick={() => {
+                      setDropdownOpen(false);
+                      setIsProfileModalOpen(true);
+                    }}
+                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs font-semibold text-on-surface hover:bg-surface-container transition-colors text-left cursor-pointer"
+                  >
+                    <User className="w-4 h-4 text-primary" />
+                    Profile Details
+                  </button>
+                  <button
+                    onClick={handleSignOut}
+                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 transition-colors text-left border-t border-outline-variant/50 mt-1 cursor-pointer"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    Sign Out
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </header>
+
+        {/* Primary Mobile Navigation (only visible on mobile screens) */}
+        <div className="md:hidden flex justify-center pb-3 px-margin-mobile">
+          <SlideTabs 
+            tabs={primaryTabs} 
+            selected={activeIndex} 
+            onSelect={handleSelectTab} 
           />
         </div>
-
-        {/* Right User Area */}
-        <div className="flex items-center gap-4 shrink-0">
-          {/* Search bar inside header (only visible when not in active search pages) */}
-          {!location.pathname.startsWith('/jobs') && (
-            <div className="relative hidden xl:block w-48">
-              <Search className="w-4 h-4 text-on-surface-variant absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Search resources..."
-                className="w-full pl-9 pr-4 py-1.5 bg-surface-container border border-outline-variant/60 rounded-full text-xs text-on-surface placeholder:text-on-surface-variant focus:outline-none focus:ring-1 focus:ring-primary"
-              />
-            </div>
-          )}
-
-          {/* Notifications */}
-          <button className="relative p-2 text-on-surface-variant hover:text-primary hover:bg-surface-container rounded-full transition-colors">
-            <Bell className="w-4.5 h-4.5" />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-error rounded-full"></span>
-          </button>
-
-          {/* User profile dropdown */}
-          <div className="relative pl-2 border-l border-outline-variant">
-            <button 
-              onClick={() => setDropdownOpen(!dropdownOpen)} 
-              className="flex items-center gap-2 hover:opacity-85 transition-opacity cursor-pointer text-left focus:outline-none"
-            >
-              {profile ? (
-                <>
-                  <div className="w-8 h-8 rounded-full bg-primary text-on-primary flex items-center justify-center font-bold text-xs select-none">
-                    {initials}
-                  </div>
-                  <div className="hidden lg:flex items-center gap-1">
-                    <div className="text-left">
-                      <p className="font-label-sm text-xs font-semibold text-on-surface leading-tight truncate max-w-[100px]">
-                        {displayName}
-                      </p>
-                      <p className="text-[9px] text-on-surface-variant leading-none mt-0.5 max-w-[90px] truncate">
-                        {roleTitle}
-                      </p>
-                    </div>
-                    <ChevronDown className="w-3.5 h-3.5 text-on-surface-variant shrink-0" />
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="w-8 h-8 rounded-full bg-primary/20 animate-pulse"></div>
-                  <div className="hidden lg:block space-y-1">
-                    <div className="w-16 h-3 bg-outline-variant/30 animate-pulse rounded"></div>
-                    <div className="w-12 h-2 bg-outline-variant/30 animate-pulse rounded"></div>
-                  </div>
-                </>
-              )}
-            </button>
-
-            {/* Profile Dropdown Menu */}
-            {dropdownOpen && (
-              <div className="absolute right-0 mt-2 w-52 bg-surface border border-outline-variant rounded-xl shadow-lg py-1.5 z-50 animate-fade-in-up">
-                {profile && (
-                  <div className="px-4 py-2 border-b border-outline-variant/50 mb-1">
-                    <p className="font-label-md text-xs font-bold text-on-surface truncate">{profile.full_name}</p>
-                    <p className="text-[10px] text-on-surface-variant truncate">{profile.email}</p>
-                  </div>
-                )}
-                <Link
-                  to="/dashboard"
-                  onClick={() => setDropdownOpen(false)}
-                  className="flex items-center gap-2.5 px-4 py-2 text-xs font-semibold text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors"
-                >
-                  <User className="w-4 h-4" />
-                  Profile
-                </Link>
-                <Link
-                  to="/dashboard"
-                  onClick={() => setDropdownOpen(false)}
-                  className="flex items-center gap-2.5 px-4 py-2 text-xs font-semibold text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors"
-                >
-                  <Settings className="w-4 h-4" />
-                  Settings
-                </Link>
-                <button
-                  onClick={handleSignOut}
-                  className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-semibold text-error hover:bg-error/10 transition-colors text-left border-t border-outline-variant/50 mt-1 pt-1.5"
-                >
-                  <LogOut className="w-4 h-4" />
-                  Sign Out
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </header>
-
-      {/* Primary Mobile Navigation (only visible on mobile screens) */}
-      <div className="md:hidden flex justify-center pb-3 px-margin-mobile">
-        <SlideTabs 
-          tabs={primaryTabs} 
-          selected={activeIndex} 
-          onSelect={handleSelectTab} 
-        />
       </div>
-    </div>
+
+      {/* Profile Details & Photo Upload Modal */}
+      <ProfileModal
+        isOpen={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
+        onProfileUpdated={(updated) => {
+          setProfile(updated);
+          if (updated.title) setRoleTitle(updated.title);
+        }}
+      />
+    </>
   );
 }
-

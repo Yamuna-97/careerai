@@ -1,8 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { NavLink, Link, useLocation } from 'react-router-dom';
+import ProfileModal from './ProfileModal';
 
 export default function Sidebar() {
   const location = useLocation();
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+
   const navItems = [
     { name: 'Dashboard', path: '/dashboard', icon: 'dashboard' },
     { name: 'Resume Hub', path: '/resume', icon: 'description' },
@@ -48,7 +51,7 @@ export default function Sidebar() {
                   className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors duration-200 ${
                     isActive
                       ? 'text-primary font-bold border-l-4 border-primary bg-surface-container-low scale-[0.98]'
-                      : 'text-on-surface-variant hover:bg-surface-container border-l-4 border-transparent hover:border-outline-variant'
+                      : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container'
                   }`}
                 >
                   <span className={`material-symbols-outlined ${isActive ? 'icon-filled' : ''}`}>
@@ -56,10 +59,10 @@ export default function Sidebar() {
                   </span>
                   <span className="font-label-md text-label-md">{item.name}</span>
                 </Link>
-                
-                {/* Expandable sub-items for Resume workflow */}
-                {item.path === '/resume' && isResumePath && (
-                  <ul className="pl-9 mt-1 space-y-1 mb-2">
+
+                {/* Submenu for Resume feature */}
+                {item.name === 'Resume Hub' && isResumePath && (
+                  <ul className="pl-9 pr-2 py-1 space-y-1 bg-surface-container-lowest/50 rounded-lg my-1 animate-fade-in">
                     <li>
                       <Link
                         to="/resume/builder"
@@ -67,14 +70,14 @@ export default function Sidebar() {
                           location.pathname === '/resume/builder' ? 'text-primary font-bold' : 'text-on-surface-variant hover:text-primary'
                         }`}
                       >
-                        • Manual Builder
+                        • Resume Editor
                       </Link>
                     </li>
                     <li>
                       <Link
                         to="/resume/ai-studio"
                         className={`block py-1 text-[11px] font-semibold ${
-                          location.pathname === '/resume/ai-studio' ? 'text-primary font-bold' : 'text-on-surface-variant hover:text-primary'
+                          location.pathname.startsWith('/resume/ai-studio') ? 'text-primary font-bold' : 'text-on-surface-variant hover:text-primary'
                         }`}
                       >
                         • AI Studio
@@ -90,16 +93,6 @@ export default function Sidebar() {
                         • Template Gallery
                       </Link>
                     </li>
-                    <li>
-                      <Link
-                        to="/resume/latex-editor"
-                        className={`block py-1 text-[11px] font-semibold ${
-                          location.pathname === '/resume/latex-editor' ? 'text-primary font-bold' : 'text-on-surface-variant hover:text-primary'
-                        }`}
-                      >
-                        • LaTeX Editor
-                      </Link>
-                    </li>
                   </ul>
                 )}
               </li>
@@ -109,26 +102,19 @@ export default function Sidebar() {
 
         {/* Bottom User Area */}
         <div className="px-stack-sm mt-auto border-t border-outline-variant pt-stack-md flex flex-col gap-1">
-          <Link
-            to="/dashboard"
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container transition-colors"
+          <button
+            onClick={() => setIsProfileModalOpen(true)}
+            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors text-left cursor-pointer"
           >
             <span className="material-symbols-outlined">person</span>
-            <span className="font-label-md text-label-md">Profile</span>
-          </Link>
+            <span className="font-label-md text-label-md font-semibold">Profile Details</span>
+          </button>
           <Link
-            to="/dashboard"
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container transition-colors"
-          >
-            <span className="material-symbols-outlined">settings</span>
-            <span className="font-label-md text-label-md">Settings</span>
-          </Link>
-          <Link
-            to="/"
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container transition-colors"
+            to="/login"
+            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-rose-600 hover:bg-rose-50 transition-colors"
           >
             <span className="material-symbols-outlined">logout</span>
-            <span className="font-label-md text-label-md">Sign Out</span>
+            <span className="font-label-md text-label-md font-semibold">Sign Out</span>
           </Link>
         </div>
       </nav>
@@ -153,6 +139,12 @@ export default function Sidebar() {
           );
         })}
       </nav>
+
+      {/* Profile Details Modal */}
+      <ProfileModal
+        isOpen={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
+      />
     </>
   );
 }

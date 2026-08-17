@@ -35,7 +35,6 @@ export const SIDEBAR_SECTIONS = {
       { name: 'Resume Editor', path: '/resume/builder',      icon: FilePen         },
       { name: 'Templates',     path: '/resume/templates',    icon: LayoutTemplate  },
       { name: 'AI Studio',     path: '/resume/ai-studio',    icon: Sparkles        },
-      { name: 'LaTeX Editor',  path: '/resume/latex-editor', icon: Code2           },
     ],
   },
   interview: {

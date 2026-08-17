@@ -172,11 +172,11 @@ def parse_resume_text_programmatically(text: str) -> Dict[str, Any]:
         fullName = email.split("@")[0].title()
         
     personal = {
-        "fullName": fullName or "Candidate Name",
-        "title": lines[1] if len(lines) > 1 and len(lines[1]) < 50 and not any(x in lines[1] for x in ("@", "http")) else "Software Engineer",
+        "fullName": fullName,
+        "title": lines[1] if len(lines) > 1 and len(lines[1]) < 50 and not any(x in lines[1] for x in ("@", "http")) else "",
         "email": email,
         "phone": phone,
-        "location": "India",
+        "location": "",
         "linkedin": linkedin,
         "github": github,
         "portfolio": "",
@@ -223,7 +223,7 @@ def parse_resume_text_programmatically(text: str) -> Dict[str, Any]:
         if current_section:
             section_lines[current_section].append(line)
             
-    sections["summary"] = " ".join(section_lines["summary"])[:300] or "Professional software engineer skilled in designing, building, and deploying robust applications."
+    sections["summary"] = " ".join(section_lines["summary"])[:500]
 
     # Process skills
     skills_list = []
@@ -246,7 +246,7 @@ def parse_resume_text_programmatically(text: str) -> Dict[str, Any]:
                 skills_list.append(skill)
                 
     parsed_skills = []
-    for idx, name in enumerate(skills_list[:15]):
+    for idx, name in enumerate(skills_list[:20]):
         parsed_skills.append({
             "id": str(idx + 1),
             "name": name,
@@ -259,58 +259,47 @@ def parse_resume_text_programmatically(text: str) -> Dict[str, Any]:
     degrees = ["Bachelor", "Master", "B.Tech", "M.Tech", "B.E.", "M.E.", "B.S.", "M.S.", "PhD", "B.C.A.", "M.C.A."]
     edu_lines = section_lines["education"]
     edu_idx = 1
-    for edu_line in edu_lines[:3]:
-        deg_found = "Bachelor of Science"
+    for edu_line in edu_lines[:4]:
+        deg_found = ""
         for d in degrees:
             if d.lower() in edu_line.lower():
                 deg_found = d
                 break
         inst_match = re.search(r'([A-Za-z\s]+ (?:University|College|Institute|School))', edu_line, re.IGNORECASE)
-        institution = inst_match.group(1).strip() if inst_match else "Technology Institute"
-        parsed_education.append({
-            "id": str(edu_idx),
-            "institution": institution,
-            "degree": deg_found,
-            "fieldOfStudy": "Computer Science" if "computer" in edu_line.lower() or "information" in edu_line.lower() else "Engineering",
-            "startDate": "2020",
-            "endDate": "2024",
-            "grade": "",
-            "description": edu_line
-        })
-        edu_idx += 1
-        
-    if not parsed_education:
-        parsed_education.append({
-            "id": "1",
-            "institution": "University of Technology",
-            "degree": "Bachelor of Technology",
-            "fieldOfStudy": "Computer Science & Engineering",
-            "startDate": "2020",
-            "endDate": "2024",
-            "grade": "",
-            "description": "Graduated with honors in Computer Science."
-        })
+        institution = inst_match.group(1).strip() if inst_match else edu_line
+        if institution:
+            parsed_education.append({
+                "id": str(edu_idx),
+                "institution": institution,
+                "degree": deg_found,
+                "fieldOfStudy": "Computer Science" if "computer" in edu_line.lower() or "information" in edu_line.lower() else "",
+                "startDate": "",
+                "endDate": "",
+                "grade": "",
+                "description": edu_line
+            })
+            edu_idx += 1
 
     # Process experience
     parsed_experience = []
     exp_lines = section_lines["experience"]
     exp_idx = 1
     current_item = None
-    for line in exp_lines[:10]:
+    for line in exp_lines[:12]:
         if any(indicator in line.lower() for indicator in ("inc", "llc", "corp", "co", "technologies", "solutions", "limited")) or re.search(r'\b(engineer|developer|analyst|manager|intern)\b', line, re.IGNORECASE):
             if current_item:
                 parsed_experience.append(current_item)
             title_match = re.search(r'([A-Za-z\s]+ (?:Developer|Engineer|Analyst|Intern|Manager))', line, re.IGNORECASE)
-            pos = title_match.group(1).strip() if title_match else "Software Developer"
+            pos = title_match.group(1).strip() if title_match else ""
             comp_match = re.search(r'([A-Za-z\s]+ (?:Technologies|Solutions|Corp|Inc|LLC|Co))', line, re.IGNORECASE)
-            comp = comp_match.group(1).strip() if comp_match else "Tech Solutions Ltd"
+            comp = comp_match.group(1).strip() if comp_match else line
             current_item = {
                 "id": str(exp_idx),
                 "company": comp,
                 "position": pos,
-                "location": "Remote",
-                "startDate": "2024-01-01",
-                "endDate": "Present",
+                "location": "",
+                "startDate": "",
+                "endDate": "",
                 "currentlyWorking": True,
                 "description": ""
             }
@@ -320,18 +309,6 @@ def parse_resume_text_programmatically(text: str) -> Dict[str, Any]:
             
     if current_item:
         parsed_experience.append(current_item)
-        
-    if not parsed_experience:
-        parsed_experience.append({
-            "id": "1",
-            "company": "Software Development Corporation",
-            "position": "Software Engineer Intern",
-            "location": "Bengaluru, India",
-            "startDate": "2024-01-01",
-            "endDate": "Present",
-            "currentlyWorking": True,
-            "description": "Collaborated with cross-functional teams to build and maintain web applications using Python and React."
-        })
 
     # Process projects
     parsed_projects = []
@@ -346,7 +323,7 @@ def parse_resume_text_programmatically(text: str) -> Dict[str, Any]:
                 "id": str(proj_idx),
                 "name": line.strip(":"),
                 "description": "",
-                "technologies": "Python, React",
+                "technologies": "",
                 "githubUrl": "",
                 "liveUrl": ""
             }
@@ -356,16 +333,6 @@ def parse_resume_text_programmatically(text: str) -> Dict[str, Any]:
             
     if current_proj:
         parsed_projects.append(current_proj)
-        
-    if not parsed_projects:
-        parsed_projects.append({
-            "id": "1",
-            "name": "Intelligent Resume Optimizer",
-            "description": "An AI-powered system that optimizes resumes against job descriptions to increase interview invitation rates.",
-            "technologies": "FastAPI, React, Python",
-            "githubUrl": "",
-            "liveUrl": ""
-        })
 
     return {
         "personal": personal,

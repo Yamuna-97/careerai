@@ -1,8 +1,464 @@
 import React from 'react';
 
-export default function ResumePreview({ resumeData, templateId = 'Modern', scale = 100 }) {
-  const data = resumeData || {};
+const DEFAULT_SHOWCASE = {
+  fullName: "Alex Morgan",
+  title: "Senior Software Engineer",
+  email: "alex.morgan@example.com",
+  phone: "+1 (555) 019-2834",
+  location: "San Francisco, CA",
+  linkedin: "linkedin.com/in/alexmorgan",
+  github: "github.com/alexmorgan",
+  portfolio: "alexmorgan.dev",
+  summary: "Results-driven Software Engineer with 6+ years of experience designing, architecting, and scaling high-performance web applications, distributed systems, and modern cloud architectures.",
+  experience: [
+    {
+      id: "1",
+      role: "Lead Software Engineer",
+      company: "Apex Tech Innovations",
+      location: "San Francisco, CA",
+      period: "2021 – Present",
+      bullets: [
+        "Architected and deployed microservices handling 10M+ daily API requests with 99.99% uptime.",
+        "Led a cross-functional engineering team of 8 engineers across frontend, backend, and cloud infra.",
+        "Optimized PostgreSQL queries and Redis caching, reducing p99 latency by 35%."
+      ]
+    },
+    {
+      id: "2",
+      role: "Full Stack Developer",
+      company: "Vanguard Digital Systems",
+      location: "New York, NY",
+      period: "2018 – 2021",
+      bullets: [
+        "Engineered responsive React web interfaces and scalable RESTful APIs in Python and FastAPI.",
+        "Integrated automated CI/CD pipelines reducing deployment friction and release turnaround by 50%."
+      ]
+    }
+  ],
+  education: [
+    {
+      id: "1",
+      degree: "B.S. in Computer Science",
+      school: "University of California, Berkeley",
+      period: "2014 – 2018",
+      grade: "3.85 GPA"
+    }
+  ],
+  skills: [
+    { id: "1", name: "Python", category: "Programming Languages" },
+    { id: "2", name: "JavaScript / TypeScript", category: "Programming Languages" },
+    { id: "3", name: "React", category: "Frameworks" },
+    { id: "4", name: "FastAPI", category: "Frameworks" },
+    { id: "5", name: "PostgreSQL", category: "Databases" },
+    { id: "6", name: "Docker", category: "Tools & Tech" },
+    { id: "7", name: "AWS", category: "Tools & Tech" },
+    { id: "8", name: "Git", category: "Tools & Tech" },
+    { id: "9", name: "Redis", category: "Tools & Tech" },
+    { id: "10", name: "System Architecture", category: "Other" }
+  ],
+  projects: [
+    {
+      id: "1",
+      name: "Cloud-Scale Telemetry Engine",
+      technologies: "FastAPI, React, Docker, Redis",
+      startDate: "2023",
+      endDate: "2024",
+      description: "Real-time telemetry and metrics analytics dashboard processing distributed container logs."
+    }
+  ]
+};
+
+const TEMPLATE_SHOWCASES = {
+  '1': {
+    fullName: "Your Name Here",
+    title: "Your Position or Tagline Here",
+    email: "your_name@email.com",
+    phone: "000-00-0000",
+    location: "Location, COUNTRY",
+    linkedin: "your_id",
+    github: "your_id",
+    portfolio: "www.homepage.com",
+    summary: "",
+    experience: [
+      {
+        id: "1",
+        role: "Job Title 1",
+        company: "Company 1",
+        period: "Month 20XX -- Ongoing",
+        location: "Location",
+        bullets: ["Job description 1", "Job description 2"]
+      },
+      {
+        id: "2",
+        role: "Job Title 2",
+        company: "Company 2",
+        period: "Month 20XX -- Ongoing",
+        location: "Location",
+        bullets: ["Job description 1", "Job description 2"]
+      }
+    ],
+    education: [
+      {
+        id: "1",
+        degree: "PhD",
+        school: "Some University",
+        period: "2010 -- 2014"
+      }
+    ],
+    skills: [
+      { id: "1", name: "Python", category: "Programming Languages" },
+      { id: "2", name: "LaTeX", category: "Programming Languages" },
+      { id: "3", name: "Data Analysis", category: "Other" }
+    ],
+    projects: [
+      {
+        id: "1",
+        name: "Project 1",
+        technologies: "Funding agency/institution",
+        description: "Details"
+      },
+      {
+        id: "2",
+        name: "Project 2",
+        technologies: "Funding agency/institution",
+        description: "Project duration"
+      }
+    ]
+  },
+  '2': {
+    fullName: "Your Name Here, Ph.D.",
+    title: "Physicist",
+    email: "example@gmail.com",
+    phone: "",
+    location: "",
+    linkedin: "example",
+    github: "overleaf_example",
+    portfolio: "http://example.example.org/",
+    summary: "",
+    experience: [
+      {
+        id: "1",
+        role: "Job Title 1",
+        company: "Company 1",
+        period: "Month 20XX -- Ongoing",
+        bullets: ["Job description 1", "Job description 2"]
+      }
+    ],
+    education: [
+      {
+        id: "1",
+        degree: "Ph.D. in Physics",
+        school: "Unseen University",
+        period: "1999"
+      }
+    ],
+    skills: [
+      { id: "1", name: "Physics", category: "Programming Languages" }
+    ],
+    projects: []
+  },
+  '3': {
+    fullName: "Your Name",
+    title: "Robotics Researcher",
+    email: "your.email@example.com",
+    phone: "+00 00 000 0000",
+    location: "City, Country",
+    linkedin: "xxx.com/in/yourprofile",
+    github: "xxx.com/yourusername",
+    portfolio: "Scholar Profile",
+    summary: "Robotics researcher specializing in Vision-Language-Action (VLA) models and robot learning for complex manipulation. I build end-to-end systems across simulation and hardware.",
+    experience: [
+      {
+        id: "1",
+        role: "Robotics Research Intern",
+        company: "Tech Company or Research Lab",
+        period: "May 2025 -- Aug 2025",
+        bullets: [
+          "Engineered a VR-integrated teleoperation suite for industrial manipulators to facilitate large-scale VLA data collection.",
+          "Benchmarked deployment performance of state-of-the-art foundation models on physical hardware.",
+          "Investigated novel techniques for in-context policy adaptation in unstructured environments."
+        ]
+      },
+      {
+        id: "2",
+        role: "Software Engineering Intern",
+        company: "Tech Company, Location",
+        period: "Sept 2023 -- May 2024",
+        bullets: [
+          "Programmed C# and C++ middleware for automated hardware validation systems.",
+          "Optimized legacy GUI modules, resulting in improved system response times during testing.",
+          "Collaborated with the systems team to integrate firmware updates for semiconductor equipment."
+        ]
+      }
+    ],
+    education: [
+      {
+        id: "1",
+        degree: "MSc in Robotics",
+        school: "University Name, Location",
+        period: "2024 -- 2026",
+        grade: "3.88 GPA"
+      },
+      {
+        id: "2",
+        degree: "B.Eng in Electrical Engineering",
+        school: "University Name, Location",
+        period: "2019 -- 2023",
+        grade: "3.92 GPA"
+      }
+    ],
+    skills: [
+      { id: "1", name: "Robot Learning", category: "Programming Languages" },
+      { id: "2", name: "Geometric Computer Vision", category: "Programming Languages" },
+      { id: "3", name: "Teleoperation", category: "Other" }
+    ],
+    projects: []
+  },
+  '4': {
+    fullName: "Harshibar",
+    title: "Software Engineer",
+    email: "hello@email.com",
+    phone: "555.555.5555",
+    location: "U.S. Citizen",
+    linkedin: "harshibar",
+    github: "harshibar",
+    portfolio: "",
+    summary: "",
+    experience: [
+      {
+        id: "1",
+        role: "Creator",
+        company: "YouTube",
+        period: "Aug. 2019 -- Present",
+        location: "San Francisco, CA",
+        bullets: [
+          "Grew channel to 60k subscribers in 1.5 years; created 80+ videos on tech and productivity",
+          "Conducted A/B testing on titles and thumbnails; increased video impressions by 2.5M in 3 months",
+          "Designed a Notion workflow to streamline video production and roadmapping; boosted productivity by 20%"
+        ]
+      },
+      {
+        id: "2",
+        role: "Software Engineer",
+        company: "Google Verily",
+        period: "Aug. 2018 -- Sept. 2019",
+        location: "San Francisco, CA",
+        bullets: [
+          "Led front-end development of a dashboard to process 50k blood samples and detect early-stage cancer",
+          "Rebuilt a Quality Control product with input from 20 cross-functional stakeholders, saving $1M annually"
+        ]
+      }
+    ],
+    education: [],
+    skills: [],
+    projects: []
+  },
+  '5': {
+    fullName: "Raging Bull",
+    title: "Data Scientist & Tiger of the Year",
+    email: "mail@dot.com",
+    phone: "+1 212 355 3000",
+    location: "301 Park Ave, New-York, NY, USA",
+    linkedin: "laguer.github.io/sixtysecondscv",
+    github: "LaGuer/SixtySecondsCV",
+    portfolio: "",
+    summary: "The giant panda is a terrestrial animal and primarily spends its life roaming and feeding in the bamboo forests of the Qinling Mountains.",
+    experience: [
+      {
+        id: "1",
+        role: "CEO The Panda Way",
+        company: "Start Up",
+        period: "currently",
+        bullets: [
+          "Chief executive officer, Head developer and yoga ambassador of 'The Panda Way' - A company from pandas for pandas."
+        ]
+      },
+      {
+        id: "2",
+        role: "Data Scientist",
+        company: "Amis University",
+        period: "2018 -- 2019",
+        bullets: [
+          "Researching the impact of adequate AMIS nutrition compared to conventional feeding methods."
+        ]
+      }
+    ],
+    education: [
+      {
+        id: "1",
+        degree: "Post-Doc Panda Studies",
+        school: "Panda Academy",
+        period: "2009 -- 2010",
+        description: "In-depth studies on the impact of bamboo nutrition for young pandas."
+      },
+      {
+        id: "2",
+        degree: "Master Studies Panda Science",
+        school: "Panda Academy",
+        period: "2006 -- 2008",
+        description: "Focus: Advanced rice hat studies and nouveau rain-reflecting cover materials."
+      }
+    ],
+    skills: [
+      { id: "1", name: "Wearing asian rice hats", category: "Programming Languages" },
+      { id: "2", name: "Playing Chess", category: "Programming Languages" },
+      { id: "3", name: "Playing the bamboo stick", category: "Other" }
+    ],
+    projects: []
+  },
+  '6': {
+    fullName: "Your Name",
+    title: "Your Program",
+    email: "youremail@email.com",
+    phone: "xxxxxxxxxx",
+    location: "Indian Institute Of Information Technology, Vadodara",
+    linkedin: "LinkedIn Profile",
+    github: "GitHub Profile",
+    portfolio: "",
+    summary: "",
+    experience: [
+      {
+        id: "1",
+        role: "Your Position",
+        company: "Your Company",
+        period: "Year",
+        bullets: ["Detail description of work done in this position or organization"]
+      }
+    ],
+    education: [
+      {
+        id: "1",
+        degree: "Your Degree and Course name",
+        school: "Indian Institute of Information Technology, Vadodara",
+        period: "Year",
+        grade: "CGPA/Percentage: xxx"
+      }
+    ],
+    skills: [
+      { id: "1", name: "Your Skill 1", category: "Programming Languages" }
+    ],
+    projects: []
+  },
+  '7': {
+    fullName: "Students Name",
+    title: "B.Tech Student",
+    email: "something@example.com",
+    phone: "XXXXXXXXX",
+    location: "Indian Institute Of Technology, Guwahati",
+    linkedin: "LINKEDINUSERID",
+    github: "USERID",
+    portfolio: "https://example.com",
+    summary: "",
+    experience: [
+      {
+        id: "1",
+        role: "Project Intern",
+        company: "Tech Labs",
+        period: "2018 -- Present",
+        bullets: [
+          "Developed features for automated verification",
+          "Iterated on core models"
+        ]
+      }
+    ],
+    education: [
+      {
+        id: "1",
+        degree: "B.Tech. Major",
+        school: "Indian Institute of Technology, Guwahati",
+        period: "2016-Present",
+        grade: "0.00 (Current)"
+      }
+    ],
+    skills: [
+      { id: "1", name: "Computer Science", category: "Programming Languages" }
+    ],
+    projects: []
+  },
+  '8': {
+    fullName: "MY NAME",
+    title: "Curriculum vitae",
+    email: "email@email.email",
+    phone: "(123)~ 456-7890",
+    location: "Ville, Province, Pays",
+    linkedin: "thelink",
+    github: "GitHub",
+    portfolio: "",
+    summary: "I am a self-motivated professional with extensive domain expertise.",
+    experience: [
+      {
+        id: "1",
+        role: "Job 1",
+        company: "My employer",
+        period: "2000 - present",
+        bullets: ["My job was to ..."]
+      }
+    ],
+    education: [
+      {
+        id: "1",
+        degree: "Master's degree",
+        school: "University XXX",
+        period: "1997 - Expected 2025",
+        grade: "5.50/4.33"
+      }
+    ],
+    skills: [
+      { id: "1", name: "Deserving a job", category: "Programming Languages" },
+      { id: "2", name: "Cooking", category: "Other" }
+    ],
+    projects: []
+  },
+  '9': {
+    fullName: "Nicola Alessi",
+    title: "Web Developer",
+    email: "alessi@gmail.com",
+    phone: "+39 123 456 789",
+    location: "Rome, Italy",
+    linkedin: "nicolaalessi",
+    github: "nicolaalessi",
+    portfolio: "",
+    summary: "",
+    experience: [
+      {
+        id: "1",
+        role: "Web Developer",
+        company: "Alessi S.r.l.",
+        period: "2012 -- Present",
+        bullets: ["Designed and developed responsive websites and web applications."]
+      }
+    ],
+    education: [
+      {
+        id: "1",
+        degree: "B.Sc. in Computer Science",
+        school: "Sapienza University of Rome",
+        period: "2008 -- 2011"
+      }
+    ],
+    skills: [
+      { id: "1", name: "PHP", category: "Programming Languages" },
+      { id: "2", name: "JavaScript", category: "Programming Languages" }
+    ],
+    projects: []
+  }
+};
+
+export default function ResumePreview({ resumeData, templateId = 'Modern', scale = 100, useTemplateMock = false }) {
+  const rawTplId = templateId.toString();
+  const mockData = TEMPLATE_SHOWCASES[rawTplId] || DEFAULT_SHOWCASE;
+
+  const data = (useTemplateMock || !resumeData || Object.keys(resumeData).length === 0) ? mockData : resumeData;
   
+  // Check if data is completely empty/unpopulated
+  const hasUserExp = (data.experience && data.experience.length > 0) || (data.experiences && data.experiences.length > 0);
+  const hasUserEdu = (data.education && ((Array.isArray(data.education) && data.education.length > 0) || Boolean(data.education.school || data.education.degree || data.education.institution)));
+  const hasUserSkills = (data.skills && ((Array.isArray(data.skills) && data.skills.length > 0) || Object.values(data.skills).some(v => Boolean(v))));
+  const hasUserSummary = Boolean(data.summary || (data.personal && data.personal.summary));
+  const isDataEmpty = !hasUserExp && !hasUserEdu && !hasUserSkills && !hasUserSummary;
+
+  const finalData = isDataEmpty ? mockData : data;
+
   // Map numeric LaTeX template IDs to visual HTML equivalents for preview
   const tplMapping = {
     '1': 'sidebar',
@@ -19,37 +475,79 @@ export default function ResumePreview({ resumeData, templateId = 'Modern', scale
   const rawTpl = templateId.toString().toLowerCase();
   const tpl = tplMapping[rawTpl] || rawTpl;
 
-  // Dynamic schema normalization to support both Manual Builder and AI Studio formats
-  const fullName = data.fullName || (data.firstName && data.lastName ? `${data.firstName} ${data.lastName}` : '') || 'Your Name';
-  const title = data.title || 'Job Title';
+  const personal = finalData.personal || {};
+  const fullName = 
+    finalData.fullName || 
+    (finalData.firstName && finalData.lastName ? `${finalData.firstName} ${finalData.lastName}`.trim() : '') || 
+    personal.fullName || 
+    (personal.firstName && personal.lastName ? `${personal.firstName} ${personal.lastName}`.trim() : '') || 
+    'Your Name';
+
+  const title = 
+    finalData.title || 
+    personal.title || 
+    'Professional Title';
+  
+  // Attach normalized fields onto data object for sub-renderers
+  finalData.email = finalData.email || personal.email || '';
+  finalData.phone = finalData.phone || personal.phone || '';
+  finalData.location = finalData.location || personal.location || '';
+  finalData.linkedin = finalData.linkedin || personal.linkedin || '';
+  finalData.github = finalData.github || personal.github || '';
+  finalData.portfolio = finalData.portfolio || personal.portfolio || '';
+  finalData.summary = finalData.summary || personal.summary || '';
 
   // Normalize education
-  const rawEdu = data.education || [];
-  const education = Array.isArray(rawEdu) ? rawEdu : (rawEdu.school || rawEdu.degree ? [rawEdu] : []);
+  const rawEdu = finalData.education || [];
+  const rawEduArr = Array.isArray(rawEdu) ? rawEdu : (rawEdu.school || rawEdu.degree || rawEdu.institution ? [rawEdu] : []);
+  const education = rawEduArr.map(edu => ({
+    ...edu,
+    institution: edu.institution || edu.school || '',
+    degree: edu.degree || '',
+    fieldOfStudy: edu.fieldOfStudy || '',
+    startDate: edu.startDate || '',
+    endDate: edu.endDate || '',
+    grade: edu.grade || ''
+  }));
 
   // Normalize experience
-  const experience = data.experience || data.experiences || [];
+  const rawExp = finalData.experience || finalData.experiences || [];
+  const experience = rawExp.map(e => ({
+    ...e,
+    role: e.role || e.position || '',
+    company: e.company || '',
+    location: e.location || '',
+    period: e.period || (e.startDate && e.endDate ? `${e.startDate} - ${e.endDate}` : (e.startDate || '')),
+    bullets: e.bullets || (e.description ? e.description.split('\n').map(b => b.replace(/^[•\-\*]\s*/, '').trim()).filter(Boolean) : [])
+  }));
 
   // Normalize skills
   let skills = [];
-  if (Array.isArray(data.skills)) {
-    skills = data.skills;
-  } else if (data.skills && typeof data.skills === 'object') {
-    if (data.skills.design) {
-      skills.push(...data.skills.design.split(',').map(s => ({ id: Math.random().toString(), name: s.trim(), category: 'Design Skills' })));
+  const rawSkills = finalData.skills || [];
+  if (Array.isArray(rawSkills)) {
+    skills = rawSkills.map(s => typeof s === 'object' ? s : { id: Math.random().toString(), name: s, category: 'Technical' });
+  } else if (rawSkills && typeof rawSkills === 'object') {
+    if (rawSkills.technical) {
+      skills.push(...rawSkills.technical.split(',').map(s => ({ id: Math.random().toString(), name: s.trim(), category: 'Technical Skills' })));
     }
-    if (data.skills.tools) {
-      skills.push(...data.skills.tools.split(',').map(s => ({ id: Math.random().toString(), name: s.trim(), category: 'Tools & Tech' })));
+    if (rawSkills.frameworks) {
+      skills.push(...rawSkills.frameworks.split(',').map(s => ({ id: Math.random().toString(), name: s.trim(), category: 'Frameworks' })));
     }
-    if (data.skills.research) {
-      skills.push(...data.skills.research.split(',').map(s => ({ id: Math.random().toString(), name: s.trim(), category: 'Research' })));
+    if (rawSkills.design) {
+      skills.push(...rawSkills.design.split(',').map(s => ({ id: Math.random().toString(), name: s.trim(), category: 'Design Skills' })));
+    }
+    if (rawSkills.tools) {
+      skills.push(...rawSkills.tools.split(',').map(s => ({ id: Math.random().toString(), name: s.trim(), category: 'Tools & Tech' })));
+    }
+    if (rawSkills.research) {
+      skills.push(...rawSkills.research.split(',').map(s => ({ id: Math.random().toString(), name: s.trim(), category: 'Research' })));
     }
   }
 
-  const projects = data.projects || [];
-  const certifications = data.certifications || [];
-  const achievements = data.achievements || [];
-  const languages = data.languages || [];
+  const projects = finalData.projects || [];
+  const certifications = finalData.certifications || [];
+  const achievements = finalData.achievements || [];
+  const languages = finalData.languages || [];
 
   // Theme styling helpers based on template
   const getThemeStyles = () => {

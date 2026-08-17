@@ -48,16 +48,7 @@ export default function ProfileModal({ isOpen, onClose, onProfileUpdated }) {
         });
       }
     } catch (err) {
-      // Fallback to local storage cache if available
-      const saved = localStorage.getItem('careerai_user_profile');
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          setFormData(prev => ({ ...prev, ...parsed }));
-        } catch (e) {
-          console.error(e);
-        }
-      }
+      console.warn('Failed to load profile from backend:', err);
     } finally {
       setLoading(false);
     }
@@ -110,7 +101,6 @@ export default function ProfileModal({ isOpen, onClose, onProfileUpdated }) {
       });
 
       const updated = res.data || formData;
-      localStorage.setItem('careerai_user_profile', JSON.stringify(updated));
 
       // Broadcast profile update event across application
       window.dispatchEvent(new CustomEvent('careerai:profile-updated', { detail: updated }));
@@ -125,17 +115,8 @@ export default function ProfileModal({ isOpen, onClose, onProfileUpdated }) {
         onClose();
       }, 1200);
     } catch (err) {
-      console.error('Failed to update profile:', err);
-      // Still save locally so user experience is instant
-      localStorage.setItem('careerai_user_profile', JSON.stringify(formData));
-      window.dispatchEvent(new CustomEvent('careerai:profile-updated', { detail: formData }));
-      if (onProfileUpdated) onProfileUpdated(formData);
-
-      setToast(true);
-      setTimeout(() => {
-        setToast(false);
-        onClose();
-      }, 1200);
+      console.error('Failed to update profile in database:', err);
+      setError('Could not update profile. Please check your connection and try again.');
     } finally {
       setSaving(false);
     }

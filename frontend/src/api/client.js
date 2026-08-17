@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { supabase } from '../utils/supabase';
 
-const API_BASE_URL = 'http://localhost:8000/api/v1';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
 
 // Create a single centralized Axios API client
 const apiClient = axios.create({

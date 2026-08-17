@@ -22,42 +22,7 @@ from app.services import jsearch_service, job_matching_service, resume_ai_servic
 from app.services.job_normalizer import normalize_job, deduplicate_jobs
 from app.services.resume_service import get_all_resumes
 
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-bearer_scheme = HTTPBearer(auto_error=False)
-
-def _get_user_id(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
-    db: Session = Depends(get_db)
-) -> str:
-    user_id = "local_user"
-    email = "local_user@careerai.com"
-    full_name = "Local User"
-    
-    if credentials and credentials.credentials:
-        try:
-            from app.core.security import _verify_token
-            payload = _verify_token(credentials.credentials)
-            if payload.get("sub"):
-                user_id = payload.get("sub")
-                email = payload.get("email") or f"{user_id}@careerai.com"
-                user_metadata = payload.get("user_metadata", {})
-                full_name = user_metadata.get("full_name") or (email.split("@")[0].capitalize() if email else "User")
-        except BaseException:
-            pass
-
-    # Ensure user exists in users table to prevent Foreign Key constraints violation
-    from app.models.user import User
-    try:
-        existing = db.query(User).filter(User.id == user_id).first()
-        if not existing:
-            new_user = User(id=user_id, email=email, full_name=full_name)
-            db.add(new_user)
-            db.commit()
-    except Exception as e:
-        print(f"Error ensuring user exists in jobs.py: {e}")
-        db.rollback()
-
-    return user_id
+from app.core.security import get_current_user_id, get_optional_user_id
 
 
 def format_salary_display(job: dict) -> Optional[str]:
@@ -211,7 +176,7 @@ class JobApplicationUpdate(BaseModel):
 # ── Profile Endpoints ─────────────────────────────────────────────────────────
 
 @router.get("/profile", summary="Get or auto-generate user job search profile")
-def get_profile(db: Session = Depends(get_db), current_user_id: str = Depends(_get_user_id)):
+def get_profile(db: Session = Depends(get_db), current_user_id: str = Depends(get_current_user_id)):
     profile = db.query(JobSearchProfile).filter(JobSearchProfile.user_id == current_user_id).first()
 
     if profile:
@@ -264,7 +229,7 @@ def get_profile(db: Session = Depends(get_db), current_user_id: str = Depends(_g
 
 
 @router.post("/profile", summary="Create user job search profile")
-def create_profile(data: ProfileCreateUpdate, db: Session = Depends(get_db), current_user_id: str = Depends(_get_user_id)):
+def create_profile(data: ProfileCreateUpdate, db: Session = Depends(get_db), current_user_id: str = Depends(get_current_user_id)):
     existing = db.query(JobSearchProfile).filter(JobSearchProfile.user_id == current_user_id).first()
     if existing:
         raise HTTPException(status_code=400, detail="Profile already exists. Use PUT to update.")
@@ -291,7 +256,7 @@ def create_profile(data: ProfileCreateUpdate, db: Session = Depends(get_db), cur
 
 
 @router.put("/profile", summary="Update user job search profile")
-def update_profile(data: ProfileCreateUpdate, db: Session = Depends(get_db), current_user_id: str = Depends(_get_user_id)):
+def update_profile(data: ProfileCreateUpdate, db: Session = Depends(get_db), current_user_id: str = Depends(get_current_user_id)):
     profile = db.query(JobSearchProfile).filter(JobSearchProfile.user_id == current_user_id).first()
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found.")
@@ -312,7 +277,7 @@ def update_profile(data: ProfileCreateUpdate, db: Session = Depends(get_db), cur
 
 
 @router.get("/top-five", summary="Get top 5 recommended jobs for the previous month")
-def get_top_five_jobs(db: Session = Depends(get_db), current_user_id: str = Depends(_get_user_id)):
+def get_top_five_jobs(db: Session = Depends(get_db), current_user_id: str = Depends(get_current_user_id)):
     # 1. Calculate previous completed calendar month
     now = datetime.utcnow()
     if now.month == 1:
@@ -500,7 +465,7 @@ def get_top_five_jobs(db: Session = Depends(get_db), current_user_id: str = Depe
 # ── Search Endpoints ──────────────────────────────────────────────────────────
 
 @router.post("/search", summary="Search real jobs using JSearch and calculate CareerAI matches")
-def search_jobs(req: JobSearchRequest, db: Session = Depends(get_db), current_user_id: str = Depends(_get_user_id)):
+def search_jobs(req: JobSearchRequest, db: Session = Depends(get_db), current_user_id: Optional[str] = Depends(get_optional_user_id)):
     profile = db.query(JobSearchProfile).filter(JobSearchProfile.user_id == current_user_id).first()
 
     # 1. Gather queries, locations, employment types from profile or request
@@ -598,7 +563,7 @@ def search_jobs(req: JobSearchRequest, db: Session = Depends(get_db), current_us
         scored_jobs.sort(key=lambda x: x.get("salary_min") or 9999999.0)
 
     # 7. Log search history
-    if current_user_id and current_user_id != "local_user":
+    if current_user_id:
         try:
             history = JobSearchHistory(
                 id=str(uuid.uuid4()),
@@ -629,7 +594,7 @@ def get_salary(
     location: str,
     location_type: str = "CITY",
     years_of_experience: Optional[str] = None,
-    current_user_id: str = Depends(_get_user_id)
+    current_user_id: Optional[str] = Depends(get_optional_user_id)
 ):
     salary, err = jsearch_service.get_estimated_salary(
         job_title=job_title,
@@ -661,7 +626,7 @@ def get_company_salary(
     location: Optional[str] = None,
     location_type: str = "CITY",
     years_of_experience: Optional[str] = None,
-    current_user_id: str = Depends(_get_user_id)
+    current_user_id: Optional[str] = Depends(get_optional_user_id)
 ):
     salary, err = jsearch_service.get_company_salary(
         company=company,
@@ -679,7 +644,7 @@ def get_company_salary(
 # ── Saved Jobs CRUD ───────────────────────────────────────────────────────────
 
 @router.get("/saved", summary="Get all bookmarked jobs")
-def get_saved_jobs(db: Session = Depends(get_db), current_user_id: str = Depends(_get_user_id)):
+def get_saved_jobs(db: Session = Depends(get_db), current_user_id: str = Depends(get_current_user_id)):
     jobs = db.query(SavedJob).filter(SavedJob.user_id == current_user_id).all()
 
     result = []
@@ -708,7 +673,7 @@ def get_saved_jobs(db: Session = Depends(get_db), current_user_id: str = Depends
 
 
 @router.post("/{job_id}/save", summary="Bookmark a job listing")
-def save_job(job_id: str, data: JobSaveRequest, db: Session = Depends(get_db), current_user_id: str = Depends(_get_user_id)):
+def save_job(job_id: str, data: JobSaveRequest, db: Session = Depends(get_db), current_user_id: str = Depends(get_current_user_id)):
     existing = db.query(SavedJob).filter(
         SavedJob.user_id == current_user_id,
         SavedJob.external_job_id == data.id
@@ -758,7 +723,7 @@ def save_job(job_id: str, data: JobSaveRequest, db: Session = Depends(get_db), c
 
 
 @router.delete("/{job_id}/save", summary="Remove job bookmark")
-def unsave_job(job_id: str, db: Session = Depends(get_db), current_user_id: str = Depends(_get_user_id)):
+def unsave_job(job_id: str, db: Session = Depends(get_db), current_user_id: str = Depends(get_current_user_id)):
     job = db.query(SavedJob).filter(
         (SavedJob.id == job_id) | (SavedJob.external_job_id == job_id),
         SavedJob.user_id == current_user_id
@@ -775,7 +740,7 @@ def unsave_job(job_id: str, db: Session = Depends(get_db), current_user_id: str 
 # ── AI Analysis Endpoints ─────────────────────────────────────────────────────
 
 @router.post("/{job_id}/analyze", summary="Analyze job description with Gemini")
-def analyze_job(job_id: str, db: Session = Depends(get_db), current_user_id: str = Depends(_get_user_id)):
+def analyze_job(job_id: str, db: Session = Depends(get_db), current_user_id: str = Depends(get_current_user_id)):
     job = db.query(SavedJob).filter(SavedJob.id == job_id, SavedJob.user_id == current_user_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Save the job first to perform AI analysis.")
@@ -806,7 +771,7 @@ Return ONLY a valid JSON object matching this schema:
 
 
 @router.post("/{job_id}/optimize-resume", summary="Suggest resume optimizations for job description")
-def optimize_resume(job_id: str, db: Session = Depends(get_db), current_user_id: str = Depends(_get_user_id)):
+def optimize_resume(job_id: str, db: Session = Depends(get_db), current_user_id: str = Depends(get_current_user_id)):
     job = db.query(SavedJob).filter(SavedJob.id == job_id, SavedJob.user_id == current_user_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Save the job first to generate optimization tips.")
@@ -865,7 +830,7 @@ Return ONLY a valid JSON object matching this schema:
 # ── Tracker/Application Endpoints ─────────────────────────────────────────────
 
 @router.get("/applications", summary="Get all applications for the tracker")
-def get_applications(db: Session = Depends(get_db), current_user_id: str = Depends(_get_user_id)):
+def get_applications(db: Session = Depends(get_db), current_user_id: str = Depends(get_current_user_id)):
     apps = db.query(JobApplication).filter(JobApplication.user_id == current_user_id).all()
 
     result = []
@@ -889,7 +854,7 @@ def get_applications(db: Session = Depends(get_db), current_user_id: str = Depen
 
 
 @router.post("/applications", summary="Create application entry")
-def create_application(data: JobApplicationCreate, db: Session = Depends(get_db), current_user_id: str = Depends(_get_user_id)):
+def create_application(data: JobApplicationCreate, db: Session = Depends(get_db), current_user_id: str = Depends(get_current_user_id)):
     job = db.query(SavedJob).filter(SavedJob.id == data.saved_job_id, SavedJob.user_id == current_user_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Saved job not found.")
@@ -915,7 +880,7 @@ def create_application(data: JobApplicationCreate, db: Session = Depends(get_db)
 
 
 @router.put("/applications/{app_id}", summary="Update application status")
-def update_application(app_id: str, data: JobApplicationUpdate, db: Session = Depends(get_db), current_user_id: str = Depends(_get_user_id)):
+def update_application(app_id: str, data: JobApplicationUpdate, db: Session = Depends(get_db), current_user_id: str = Depends(get_current_user_id)):
     app_entry = db.query(JobApplication).filter(
         JobApplication.id == app_id,
         JobApplication.user_id == current_user_id

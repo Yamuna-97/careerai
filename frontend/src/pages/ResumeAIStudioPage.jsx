@@ -181,35 +181,26 @@ export default function ResumeAIStudioPage() {
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
 
-  const [recentActivity, setRecentActivity] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem("careerai_ai_activity") || "[]");
-    } catch {
-      return [];
-    }
-  });
-
-  const [savedResumesList, setSavedResumesList] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem("careerai_saved_resumes") || "[]");
-    } catch {
-      return [];
-    }
-  });
+  const [recentActivity, setRecentActivity] = useState([]);
+  const [savedResumesList, setSavedResumesList] = useState([]);
 
   useEffect(() => {
-    try {
-      setSavedResumesList(JSON.parse(localStorage.getItem("careerai_saved_resumes") || "[]"));
-    } catch { }
+    const fetchResumes = async () => {
+      try {
+        const res = await apiClient.get('/resumes');
+        if (Array.isArray(res.data)) {
+          setSavedResumesList(res.data);
+        }
+      } catch (e) {
+        // Unauthenticated or network issue
+      }
+    };
+    fetchResumes();
   }, []);
 
   const saveActivity = (type, detail, extra = {}) => {
     const entry = { id: Date.now(), type, detail, extra, createdAt: new Date().toISOString() };
-    setRecentActivity((prev) => {
-      const u = [entry, ...prev].slice(0, 8);
-      localStorage.setItem("careerai_ai_activity", JSON.stringify(u));
-      return u;
-    });
+    setRecentActivity((prev) => [entry, ...prev].slice(0, 8));
   };
 
   const simulateLoading = async (steps) => {
@@ -255,55 +246,63 @@ export default function ResumeAIStudioPage() {
   };
 
   const handleImportSaved = (entry) => {
-    const d = entry.data;
+    const d = entry.data || entry;
+    const fName = d.full_name || `${d.firstName || ""} ${d.lastName || ""}`.trim() || d.title || "My Resume";
     const converted = {
       personal: {
-        fullName: `${d.firstName || ""} ${d.lastName || ""}`.trim(),
+        fullName: fName,
         title: d.title || "",
         email: d.email || "",
         phone: d.phone || "",
         location: d.location || "",
         linkedin: d.linkedin || "",
-        github: "",
-        portfolio: "",
-        profileImage: "",
+        github: d.github || "",
+        portfolio: d.portfolio || "",
+        profileImage: d.profile_image || "",
       },
       summary: d.summary || "",
-      experience: (d.experiences || []).map((e, i) => ({
-        id: String(i + 1),
-        company: e.company || "",
-        position: e.role || "",
-        location: e.location || "",
-        startDate: e.period?.split(" - ")[0] || "",
-        endDate: e.period?.split(" - ")[1] || "",
-        description: (e.bullets || []).join("\n"),
-      })),
-      education: d.education
-        ? [
-          {
-            id: "1",
-            institution: d.education.school || "",
-            degree: d.education.degree || "",
-            fieldOfStudy: "",
-            startDate: d.education.period?.split(" - ")[0] || "",
-            endDate: d.education.period?.split(" - ")[1] || "",
-          },
-        ]
+      experience: Array.isArray(d.experience || d.experiences)
+        ? (d.experience || d.experiences).map((e, i) => ({
+            id: String(e.id || i + 1),
+            company: e.company || "",
+            position: e.position || e.role || "",
+            location: e.location || "",
+            startDate: e.start_date || e.startDate || e.period?.split(" - ")[0] || "",
+            endDate: e.end_date || e.endDate || e.period?.split(" - ")[1] || "",
+            description: Array.isArray(e.bullets) ? e.bullets.join("\n") : (e.description || ""),
+          }))
         : [],
-      skills: Object.values(d.skills || {})
-        .flatMap((v, ci) =>
-          v.split(",").map((s, i) => ({ id: String(ci * 20 + i), name: s.trim(), category: "Other" }))
-        )
-        .filter((s) => s.name),
-      projects: [],
-      certifications: [],
-      achievements: [],
+      education: Array.isArray(d.education)
+        ? d.education.map((edu, i) => ({
+            id: String(edu.id || i + 1),
+            institution: edu.institution || edu.school || "",
+            degree: edu.degree || "",
+            fieldOfStudy: edu.field_of_study || edu.fieldOfStudy || "",
+            startDate: edu.start_date || edu.startDate || edu.period?.split(" - ")[0] || "",
+            endDate: edu.end_date || edu.endDate || edu.period?.split(" - ")[1] || "",
+          }))
+        : [],
+      skills: Array.isArray(d.skills)
+        ? d.skills.map((s, i) => ({
+            id: String(s.id || i + 1),
+            name: typeof s === 'string' ? s : (s.name || ''),
+            category: s.category || "Other"
+          })).filter(s => s.name)
+        : (typeof d.skills === 'object' && d.skills !== null)
+          ? Object.values(d.skills)
+              .flatMap((v, ci) =>
+                (typeof v === 'string' ? v.split(",") : []).map((s, i) => ({ id: String(ci * 20 + i), name: s.trim(), category: "Other" }))
+              )
+              .filter((s) => s.name)
+          : [],
+      projects: Array.isArray(d.projects) ? d.projects : [],
+      certifications: Array.isArray(d.certifications) ? d.certifications : [],
+      achievements: Array.isArray(d.achievements) ? d.achievements : [],
     };
     setResumeData(converted);
-    setResumeName(`${d.firstName || "My"} ${d.lastName || "Resume"} · ${entry.template}`);
+    setResumeName(fName);
     setResult(null);
     setActiveTool(null);
-    sessionStorage.setItem("careerai_ai_session", JSON.stringify(converted));
   };
 
   const handleClearResume = () => {
@@ -721,21 +720,32 @@ export default function ResumeAIStudioPage() {
 
       if (activeApplied) {
         setResumeData(activeApplied);
-        sessionStorage.setItem("careerai_ai_session", JSON.stringify(activeApplied));
-        localStorage.setItem("careerai_resume_data", JSON.stringify(activeApplied));
 
-        // Save to recent saved resumes list
-        const saved = JSON.parse(localStorage.getItem('careerai_saved_resumes') || '[]');
-        const entry = {
-          id: Date.now(),
-          savedAt: new Date().toISOString(),
-          template: localStorage.getItem('careerai_template_id') || '4',
-          data: activeApplied,
-        };
-        localStorage.setItem('careerai_saved_resumes', JSON.stringify([entry, ...saved].slice(0, 10)));
-
-        // Shift directly to Resume Editor
-        navigate("/resume/builder");
+        // Persist to Supabase PostgreSQL backend
+        try {
+          const p = activeApplied.personal || {};
+          const fName = p.fullName || activeApplied.fullName || `${p.firstName || ''} ${p.lastName || ''}`.trim() || 'My Resume';
+          apiClient.post('/resumes', {
+            title: fName,
+            template: '4',
+            full_name: fName,
+            email: p.email || activeApplied.email || '',
+            phone: p.phone || activeApplied.phone || '',
+            location: p.location || activeApplied.location || '',
+            linkedin: p.linkedin || activeApplied.linkedin || '',
+            github: p.github || activeApplied.github || '',
+            portfolio: p.portfolio || activeApplied.portfolio || '',
+            summary: activeApplied.summary || p.summary || ''
+          }).then((res) => {
+            window.dispatchEvent(new CustomEvent('careerai:resume-saved'));
+            const newId = res.data?.id;
+            navigate(newId ? `/resume/builder?id=${newId}` : "/resume/builder");
+          }).catch(() => {
+            navigate("/resume/builder");
+          });
+        } catch {
+          navigate("/resume/builder");
+        }
         return;
       }
       setResult(null);

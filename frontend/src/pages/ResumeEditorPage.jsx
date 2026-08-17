@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import apiClient from '../api/client';
 import ResumePreview from '../components/ResumePreview';
 import { exportResumePDF } from '../utils/exportResumePDF';
@@ -18,17 +18,21 @@ const EMPTY_RESUME_SCHEMA = {
   experiences: [],
   skills: {
     technical: '',
-    frameworks: '',
-    tools: ''
+    soft: '',
+    tools: '',
+    languages: ''
   },
   education: []
 };
 
 export default function ResumeEditorPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const resumeIdParam = searchParams.get('id');
+  const [resumeId, setResumeId] = useState(resumeIdParam || null);
   const [activeTab, setActiveTab] = useState('personal');
   const [completedTabs, setCompletedTabs] = useState([]);
-  const [selectedTemplate, setSelectedTemplate] = useState(() => localStorage.getItem('careerai_template_id') || '4');
+  const [selectedTemplate, setSelectedTemplate] = useState('4');
   const [zoom, setZoom] = useState(85);
   const [saveToast, setSaveToast] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -37,18 +41,7 @@ export default function ResumeEditorPage() {
   const tabLabels = { personal: 'Personal Info', experience: 'Experience', skills: 'Skills', education: 'Education' };
 
   // Resume Data State (Source of truth in Editor)
-  const [resumeData, setResumeData] = useState(() => {
-    const saved = localStorage.getItem('careerai_resume_data');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        return normalizeToEditorState(parsed);
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    return EMPTY_RESUME_SCHEMA;
-  });
+  const [resumeData, setResumeData] = useState(EMPTY_RESUME_SCHEMA);
 
   const debounceTimerRef = useRef(null);
 
@@ -113,31 +106,33 @@ export default function ResumeEditorPage() {
 
   // Load from backend on mount
   useEffect(() => {
-    apiClient.get('/resumes')
-      .then(res => {
-        if (Array.isArray(res.data) && res.data.length > 0) {
-          const active = res.data[0];
-          const normalized = normalizeToEditorState(active);
-          setResumeData(normalized);
-          localStorage.setItem('careerai_resume_data', JSON.stringify(normalized));
+    const loadResume = async () => {
+      try {
+        if (resumeIdParam) {
+          const res = await apiClient.get(`/resumes/${resumeIdParam}`);
+          if (res.data) {
+            setResumeId(res.data.id);
+            setSelectedTemplate(res.data.template || '4');
+            setResumeData(normalizeToEditorState(res.data));
+            return;
+          }
         }
-      })
-      .catch(() => {
-        // Continue with local storage cache
-      });
-  }, []);
-
-  // Debounced auto-save to localStorage cache
-  useEffect(() => {
-    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
-    debounceTimerRef.current = setTimeout(() => {
-      localStorage.setItem('careerai_resume_data', JSON.stringify(resumeData));
-    }, 1500);
-
-    return () => {
-      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+        const listRes = await apiClient.get('/resumes');
+        if (Array.isArray(listRes.data) && listRes.data.length > 0) {
+          const latest = listRes.data[0];
+          const fullRes = await apiClient.get(`/resumes/${latest.id}`);
+          if (fullRes.data) {
+            setResumeId(fullRes.data.id);
+            setSelectedTemplate(fullRes.data.template || '4');
+            setResumeData(normalizeToEditorState(fullRes.data));
+          }
+        }
+      } catch (err) {
+        console.warn('Could not load resume from backend:', err);
+      }
     };
-  }, [resumeData]);
+    loadResume();
+  }, [resumeIdParam]);
 
   const handleNext = () => {
     const currentIndex = tabsOrder.indexOf(activeTab);
@@ -161,19 +156,7 @@ export default function ResumeEditorPage() {
   const handleSaveResume = async () => {
     setIsSaving(true);
     try {
-      localStorage.setItem('careerai_resume_data', JSON.stringify(resumeData));
-      
-      const saved = JSON.parse(localStorage.getItem('careerai_saved_resumes') || '[]');
-      const entry = {
-        id: Date.now(),
-        savedAt: new Date().toISOString(),
-        template: selectedTemplate,
-        data: resumeData,
-      };
-      localStorage.setItem('careerai_saved_resumes', JSON.stringify([entry, ...saved].slice(0, 10)));
-
-      // If backend save endpoint is available, persist
-      apiClient.post('/resumes', {
+      const payload = {
         title: `${resumeData.firstName} ${resumeData.lastName}`.trim() || 'My Resume',
         template: selectedTemplate,
         full_name: `${resumeData.firstName} ${resumeData.lastName}`.trim(),
@@ -182,11 +165,20 @@ export default function ResumeEditorPage() {
         location: resumeData.location,
         linkedin: resumeData.linkedin,
         github: resumeData.github,
+        portfolio: resumeData.portfolio,
         summary: resumeData.summary
-      }).catch(() => {
-        // Keep in cache safely
-      });
+      };
 
+      let savedId = resumeId;
+      if (savedId) {
+        await apiClient.put(`/resumes/${savedId}`, payload);
+      } else {
+        const res = await apiClient.post('/resumes', payload);
+        savedId = res.data?.id;
+        if (savedId) setResumeId(savedId);
+      }
+
+      window.dispatchEvent(new CustomEvent('careerai:resume-saved'));
       setSaveToast(true);
       setTimeout(() => setSaveToast(false), 2500);
     } catch (e) {

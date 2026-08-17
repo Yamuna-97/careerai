@@ -14,7 +14,8 @@ from app.models.skill import Skill
 from app.models.certification import Certification
 from app.models.achievement import Achievement
 from app.models.interview import InterviewSession, InterviewQuestion, InterviewAnswer
-from app.models.jobs import JobSearchProfile, SavedJob, JobApplication, JobSearchHistory
+from app.models.jobs import JobSearchProfile, SavedJob, JobApplication, JobSearchHistory, TopFiveJobsCache
+from app.models.latex import LatexProject, LatexProjectFile
 
 __all__ = [
     "User",
@@ -32,4 +33,7 @@ __all__ = [
     "SavedJob",
     "JobApplication",
     "JobSearchHistory",
+    "TopFiveJobsCache",
+    "LatexProject",
+    "LatexProjectFile",
 ]

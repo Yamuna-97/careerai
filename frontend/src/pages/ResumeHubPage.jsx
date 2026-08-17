@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import Header from '../components/Header';
+import apiClient from '../api/client';
 
 export default function ResumeHubPage() {
   const navigate = useNavigate();
@@ -12,34 +13,31 @@ export default function ResumeHubPage() {
   });
 
   useEffect(() => {
-    // Read stats from localStorage to show dynamic completion indicator
-    const savedData = localStorage.getItem('careerai_resume_data');
-    if (savedData) {
+    // Read stats from backend Supabase API
+    const fetchLatestResumeStats = async () => {
       try {
-        const data = JSON.parse(savedData);
-        let filledCount = 0;
-        let totalCount = 7; // personal, summary, education, experience, projects, skills, certifications
-
-        if (data.fullName) filledCount++;
-        if (data.summary) filledCount++;
-        if (data.education && data.education.length > 0) filledCount++;
-        if (data.experience && data.experience.length > 0) filledCount++;
-        if (data.projects && data.projects.length > 0) filledCount++;
-        if (data.skills && data.skills.length > 0) filledCount++;
-        if (data.certifications && data.certifications.length > 0) filledCount++;
-
-        const completionPct = Math.round((filledCount / totalCount) * 100);
-
-        setStats({
-          completion: completionPct,
-          atsScore: data.summary ? 82 : 45, // Dynamic placeholder
-          templateName: localStorage.getItem('careerai_template_id') || 'Modern',
-          sectionsCount: filledCount
-        });
+        const res = await apiClient.get('/resumes');
+        if (Array.isArray(res.data) && res.data.length > 0) {
+          const latest = res.data[0];
+          try {
+            const statsRes = await apiClient.get(`/resumes/${latest.id}/stats`);
+            if (statsRes.data) {
+              setStats({
+                completion: statsRes.data.completion_percentage || 0,
+                atsScore: statsRes.data.ats_score || 0,
+                templateName: statsRes.data.template || 'Modern',
+                sectionsCount: Math.round((statsRes.data.completion_percentage / 100) * 7)
+              });
+            }
+          } catch (e) {
+            setStats(prev => ({ ...prev, templateName: latest.template || 'Modern' }));
+          }
+        }
       } catch (e) {
-        console.error(e);
+        // Unauthenticated or offline
       }
-    }
+    };
+    fetchLatestResumeStats();
   }, []);
 
   return (

@@ -258,20 +258,22 @@ export default function LaTeXEditorPage() {
       setCompileStatus('compiling');
       let loadedFiles = null;
 
-      // Check if user has active resume data to render
-      const savedData = localStorage.getItem('careerai_resume_data');
-      if (savedData) {
-        try {
-          const parsed = JSON.parse(savedData);
-          const renderRes = await apiClient.post(`/latex/templates/${templateId}/render`, {
-            resume_data: parsed
-          });
-          if (renderRes.data && renderRes.data.files) {
-            loadedFiles = renderRes.data.files;
+      // Check if user has active resume data to render from backend
+      try {
+        const resumeListRes = await apiClient.get('/resumes');
+        if (Array.isArray(resumeListRes.data) && resumeListRes.data.length > 0) {
+          const fullResume = await apiClient.get(`/resumes/${resumeListRes.data[0].id}`);
+          if (fullResume.data) {
+            const renderRes = await apiClient.post(`/latex/templates/${templateId}/render`, {
+              resume_data: fullResume.data
+            });
+            if (renderRes.data && renderRes.data.files) {
+              loadedFiles = renderRes.data.files;
+            }
           }
-        } catch (err) {
-          console.warn('Render with user data failed, falling back to master files:', err);
         }
+      } catch (err) {
+        console.warn('Render with user data failed, falling back to master files:', err);
       }
 
       if (!loadedFiles) {
@@ -297,13 +299,14 @@ export default function LaTeXEditorPage() {
 
   // ── Generate from Builder ─────────────────────────────────────────────────
   const handleGenerateFromManual = async () => {
-    const saved = localStorage.getItem('careerai_resume_data');
-    if (!saved) {
-      alert('No manual builder data found. Create a resume in Manual Builder first.');
-      return;
-    }
     try {
-      const res = await apiClient.post('/latex/generate', { resume_data: JSON.parse(saved) });
+      const listRes = await apiClient.get('/resumes');
+      if (!Array.isArray(listRes.data) || listRes.data.length === 0) {
+        alert('No resume found. Create a resume in Resume Editor first.');
+        return;
+      }
+      const fullRes = await apiClient.get(`/resumes/${listRes.data[0].id}`);
+      const res = await apiClient.post('/latex/generate', { resume_data: fullRes.data });
       if (res.data?.success && res.data?.latex_code) {
         setFiles(prev => ({ ...prev, 'cv.tex': res.data.latex_code }));
         setActiveFile('cv.tex');
@@ -311,20 +314,35 @@ export default function LaTeXEditorPage() {
       }
     } catch (e) {
       console.error(e);
+      alert('Could not generate LaTeX from resume.');
     }
   };
 
   // ── Import to Builder ─────────────────────────────────────────────────────
   const handleImportToBuilder = async () => {
-    if (!window.confirm('This will overwrite your Manual Builder resume data. Proceed?')) return;
+    if (!window.confirm('This will parse your LaTeX and create a new resume in the builder. Proceed?')) return;
     try {
       const res = await apiClient.post('/latex/import', { latex_code: files['cv.tex'] });
       if (res.data?.success && res.data?.resume_data) {
-        localStorage.setItem('careerai_resume_data', JSON.stringify(res.data.resume_data));
-        navigate('/resume/builder');
+        const rData = res.data.resume_data;
+        const p = rData.personal || {};
+        const title = p.fullName || `${p.firstName || ''} ${p.lastName || ''}`.trim() || 'Imported Resume';
+        const createRes = await apiClient.post('/resumes', {
+          title,
+          full_name: title,
+          email: p.email || '',
+          phone: p.phone || '',
+          location: p.location || '',
+          linkedin: p.linkedin || '',
+          github: p.github || '',
+          summary: rData.summary || ''
+        });
+        window.dispatchEvent(new CustomEvent('careerai:resume-saved'));
+        navigate(createRes.data?.id ? `/resume/builder?id=${createRes.data.id}` : '/resume/builder');
       }
     } catch (e) {
       console.error(e);
+      alert('Failed to import LaTeX into resume builder.');
     }
   };
 

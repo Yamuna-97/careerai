@@ -51,11 +51,11 @@ def _scrub_password(url: str) -> str:
     return re.sub(r'(://[^:]+:)[^@]+(@)', r'\1***\2', url)
 
 
-# ── Resolve Database URL with Placeholder Fallback ──────────────────────────
+# ── Resolve Database URL ─────────────────────────────────────────────────────
 _raw_db_url = settings.DATABASE_URL
 if _is_placeholder_url(_raw_db_url):
-    db_url = "sqlite:///./careerai.db"
-    print("[*] DATABASE_URL is not configured — using local SQLite fallback.")
+    print("[!] WARNING: DATABASE_URL is not configured. Please set DATABASE_URL in your backend .env file to your Supabase PostgreSQL connection URI.")
+    db_url = ""
 else:
     db_url = _normalize_db_url(_raw_db_url)
     try:
@@ -64,18 +64,18 @@ else:
         with test_engine.connect() as conn:
             conn.execute(text("SELECT 1"))
         test_engine.dispose()
-        print(f"[*] Connected to PostgreSQL: {_scrub_password(db_url)}")
+        print(f"[*] Connected to Supabase PostgreSQL: {_scrub_password(db_url)}")
     except Exception as e:
         safe_err = _scrub_password(str(e))
-        print(f"[!] PostgreSQL connection failed: {safe_err}. Falling back to SQLite.")
-        db_url = "sqlite:///./careerai.db"
+        print(f"[!] Supabase PostgreSQL connection warning: {safe_err}")
 
 
 # ── SQLAlchemy Engine ─────────────────────────────────────────────────────────
-if db_url.startswith("sqlite"):
+if not db_url:
+    # Use a null/mock engine URL scheme or empty configuration if DATABASE_URL is not set yet
+    # to allow FastAPI to start up with clear configuration warnings
     engine = create_engine(
-        db_url,
-        connect_args={"check_same_thread": False},
+        "postgresql+psycopg://postgres:dummy@localhost:5432/postgres",
         echo=False,
     )
 else:

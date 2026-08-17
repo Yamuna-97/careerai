@@ -1,40 +1,68 @@
 # =========================
-# Frontend
+# Environment & Secrets (NEVER COMMIT)
 # =========================
-frontend/node_modules/
-frontend/dist/
-frontend/.env
-frontend/.env.local
-frontend/.env.development.local
-frontend/.env.test.local
-frontend/.env.production.local
+.env
+.env.*
+!.env.example
+*.env
+*.env.*
+!*.env.example
 
 # =========================
-# Backend
+# Python & Bytecode
 # =========================
-backend/node_modules/
-backend/.env
-backend/.env.local
-backend/__pycache__/
-backend/*.py[cod]
-backend/.pytest_cache/
+**/__pycache__/
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+.Python
+.pytest_cache/
+.coverage
+coverage/
+.mypy_cache/
+.ruff_cache/
+*.db
+*.sqlite
+*.sqlite3
+
+# =========================
+# Virtual Environments
+# =========================
+.venv/
+venv/
+ENV/
+env/
 backend/.venv/
 backend/venv/
 
 # =========================
-# General
+# Frontend & Node
+# =========================
+node_modules/
+frontend/node_modules/
+dist/
+frontend/dist/
+build/
+.npm/
+*.tsbuildinfo
+
+# =========================
+# Temporary & Generated
 # =========================
 *.log
+logs/
+*.tmp
+*.bak
+*.swp
+*.swo
 .DS_Store
 Thumbs.db
 
-# IDE
+# =========================
+# IDE & Agent Configs
+# =========================
 .vscode/
 .idea/
-
-# OS
-*.swp
-*.swo
-
-# Antigravity agent configurations
-.agents/
+.agents/

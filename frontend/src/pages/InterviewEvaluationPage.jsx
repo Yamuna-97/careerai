@@ -17,42 +17,9 @@ export default function InterviewEvaluationPage() {
   const [improvementPlan, setImprovementPlan] = useState('');
 
   useEffect(() => {
-    // If no session_id is provided, show mock demo evaluation
+    // If no session_id is provided, report error
     if (!sessionId) {
-      setSession({
-        role: 'Senior Product Designer',
-        difficulty: 'intermediate',
-        interview_type: 'Technical',
-        format: 'text',
-        duration: 18,
-        overall_score: 82,
-        technical_score: 85,
-        communication_score: 80,
-        confidence_score: 78,
-        problem_solving_score: 84,
-        relevance_score: 88,
-        strengths: "• Excellent conceptual design alignment.\n• Clear articulation of layout grids and spacing hierarchy.",
-        weaknesses: "• Could improve structural STAR results by outlining key metric outcomes.",
-      });
-      setQnaReview([
-        {
-          question: 'Can you describe a time you had to manage a conflict within a cross-functional team?',
-          answer: 'In my role at TechCorp, engineering and design clashed over redesign timelines. I organized an alignment workshop mapping UX friction to technical debt, successfully delivering a phased rollout.',
-          score: 85,
-          technical_accuracy: 88,
-          communication: 82,
-          relevance: 90,
-          strengths: 'Excellent use of the STAR method. Clear focus on resolution and cross-functional empathy.',
-          weaknesses: 'Could improve structural results by outlining key metrics (e.g. cycle time reduction).',
-          suggestions: 'Quantify your outcome: e.g. saved 2 weeks of delay.',
-          better_answer: 'In my previous project, engineering and design disagreed on timelines. I held an alignment workshop, leading to a phased rollout that reduced shipping delays by 2 weeks.',
-          star_situation: true,
-          star_task: true,
-          star_action: true,
-          star_result: false
-        }
-      ]);
-      setImprovementPlan("### Priority 1: STAR Results\nQuantify your outcomes. Instead of saying 'improved user retention', say 'increased conversion by 14%'.\n\n### Priority 2: System Architecture\nDetail the database models and api response caching mechanisms when designing real-time interfaces.");
+      setError('No interview session ID provided. Please select a session from your interview history.');
       setLoading(false);
       return;
     }

@@ -19,6 +19,7 @@ import {
   Mic,
   Briefcase,
 } from 'lucide-react';
+import apiClient from '../api/client';
 
 // ─── Sidebar Configuration for Sections ──────────────────────────────────────
 export const SIDEBAR_SECTIONS = {
@@ -104,34 +105,47 @@ export default function ContextualSidebar({ mobileOpen, onMobileClose }) {
     setIsHovered(false);
   }, [location.pathname]);
 
-  // Load saved resumes from localStorage
+  // Load saved resumes from backend Supabase PostgreSQL
   useEffect(() => {
-    const load = () => {
-      const raw = localStorage.getItem('careerai_saved_resumes');
-      setSavedResumes(raw ? JSON.parse(raw) : []);
+    let isMounted = true;
+    const fetchResumes = async () => {
+      try {
+        const res = await apiClient.get('/resumes');
+        if (isMounted && Array.isArray(res.data)) {
+          setSavedResumes(res.data.map(r => ({
+            id: r.id,
+            title: r.title || 'My Resume',
+            template: r.template || 'Modern',
+            savedAt: r.updated_at || r.created_at || new Date().toISOString(),
+          })));
+        }
+      } catch (err) {
+        // Unauthenticated or offline
+      }
     };
-    load();
-    // Reload when storage changes (e.g. after saving)
-    window.addEventListener('storage', load);
-    // Also poll every 2s when sidebar is open (same-tab saves don't fire storage event)
-    const interval = setInterval(load, 2000);
+    fetchResumes();
+
+    const handleUpdate = () => fetchResumes();
+    window.addEventListener('careerai:resume-saved', handleUpdate);
     return () => {
-      window.removeEventListener('storage', load);
-      clearInterval(interval);
+      isMounted = false;
+      window.removeEventListener('careerai:resume-saved', handleUpdate);
     };
   }, []);
 
   const handleLoadSaved = (entry) => {
-    // Store selected template and navigate to builder
-    localStorage.setItem('careerai_template_id', entry.template);
-    navigate('/resume/builder');
+    navigate(`/resume/builder?id=${entry.id}`);
   };
 
-  const handleDeleteSaved = (e, id) => {
+  const handleDeleteSaved = async (e, id) => {
     e.stopPropagation();
-    const updated = savedResumes.filter(r => r.id !== id);
-    setSavedResumes(updated);
-    localStorage.setItem('careerai_saved_resumes', JSON.stringify(updated));
+    try {
+      await apiClient.delete(`/resumes/${id}`);
+      setSavedResumes(prev => prev.filter(r => r.id !== id));
+      window.dispatchEvent(new CustomEvent('careerai:resume-saved'));
+    } catch (err) {
+      console.error("Failed to delete resume:", err);
+    }
   };
 
   // Template accent colors map

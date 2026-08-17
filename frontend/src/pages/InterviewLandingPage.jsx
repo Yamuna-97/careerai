@@ -10,47 +10,19 @@ export default function InterviewLandingPage() {
   
   // Stats / readiness score state
   const [readiness, setReadiness] = useState({
-    readiness_score: 72,
-    technical: 78,
-    communication: 68,
-    confidence: 71,
-    problem_solving: 76,
-    completed_count: 5,
-    average_score: 74,
-    best_score: 84,
-    streak: 3
+    readiness_score: 0,
+    technical: 0,
+    communication: 0,
+    confidence: 0,
+    problem_solving: 0,
+    completed_count: 0,
+    average_score: 0,
+    best_score: 0,
+    streak: 0
   });
 
   // Recent practice history state
-  const [history, setHistory] = useState([
-    {
-      id: 'mock-session-1',
-      role: 'Full Stack Engineer',
-      type: 'Technical Interview',
-      score: 82,
-      date: 'Yesterday',
-      duration: 20,
-      created_at: '2026-08-14T10:00:00Z',
-    },
-    {
-      id: 'mock-session-2',
-      role: 'Frontend Engineer',
-      type: 'System Design',
-      score: 75,
-      date: '3 days ago',
-      duration: 25,
-      created_at: '2026-08-12T14:30:00Z',
-    },
-    {
-      id: 'mock-session-3',
-      role: 'Software Developer',
-      type: 'Behavioral',
-      score: 88,
-      date: '1 week ago',
-      duration: 15,
-      created_at: '2026-08-08T09:00:00Z',
-    }
-  ]);
+  const [history, setHistory] = useState([]);
 
   useEffect(() => {
     // Fetch real data from FastAPI backend via apiClient
@@ -61,10 +33,10 @@ export default function InterviewLandingPage() {
           apiClient.get('/interviews/history')
         ]);
 
-        if (statsRes.status === 'fulfilled' && statsRes.value.data?.completed_count > 0) {
+        if (statsRes.status === 'fulfilled' && statsRes.value.data) {
           setReadiness(statsRes.value.data);
         }
-        if (historyRes.status === 'fulfilled' && historyRes.value.data?.length > 0) {
+        if (historyRes.status === 'fulfilled' && Array.isArray(historyRes.value.data)) {
           setHistory(historyRes.value.data);
         }
       } catch (err) {
@@ -99,33 +71,20 @@ export default function InterviewLandingPage() {
 
   const handlePracticeAgain = async (sessionId) => {
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:8000/api/v1/interviews/${sessionId}/practice-again`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        navigate(`/interview-session?session_id=${data.session_id || data.session.id}`);
-      } else {
-        navigate('/interview-session?demo=true');
-      }
+      const res = await apiClient.post(`/interviews/${sessionId}/practice-again`);
+      const data = res.data;
+      navigate(`/interview-session?session_id=${data.session_id || data.session?.id || sessionId}`);
     } catch (e) {
-      navigate('/interview-session?demo=true');
+      console.error("Failed to re-practice session:", e);
+      navigate('/interview-setup');
     }
   };
 
   const handleDeleteSession = async (sessionId) => {
     if (!window.confirm("Are you sure you want to delete this interview record?")) return;
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:8000/api/v1/interviews/${sessionId}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        setHistory(prev => prev.filter(h => h.id !== sessionId));
-      }
+      await apiClient.delete(`/interviews/${sessionId}`);
+      setHistory(prev => prev.filter(h => h.id !== sessionId));
     } catch (e) {
       console.error("Delete failed", e);
     }

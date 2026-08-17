@@ -162,39 +162,25 @@ export default function ResumeTemplatesPage() {
         setTemplates(DEFAULT_TEMPLATES_CONFIG);
       });
 
-    // 2. Fetch active user resume data from backend / database first
+    // 2. Fetch active user resume data from backend
     apiClient.get('/resumes')
-      .then(res => {
+      .then(async res => {
         if (Array.isArray(res.data) && res.data.length > 0) {
-          const active = res.data[0];
-          setUserResumeData(active);
-          setHasLoadedData(true);
-          // Sync to cache
-          localStorage.setItem('careerai_resume_data', JSON.stringify(active));
-          return;
-        }
-        throw new Error('No backend resume');
-      })
-      .catch(() => {
-        // Fallback to local storage cache if available
-        const saved = localStorage.getItem('careerai_resume_data');
-        if (saved) {
-          try {
-            const parsed = JSON.parse(saved);
-            if (parsed && (parsed.personal?.fullName || parsed.fullName || parsed.title)) {
-              setUserResumeData(parsed);
-              setHasLoadedData(true);
-            }
-          } catch (e) {
-            console.error(e);
+          const latest = res.data[0];
+          const fullRes = await apiClient.get(`/resumes/${latest.id}`);
+          if (fullRes.data) {
+            setUserResumeData(fullRes.data);
+            setHasLoadedData(true);
           }
         }
+      })
+      .catch(() => {
+        // No resume yet
       });
   }, []);
 
   const handleUseTemplate = (templateId) => {
-    localStorage.setItem('careerai_template_id', templateId);
-    navigate('/resume/builder');
+    navigate(`/resume/builder`);
   };
 
   // Filter & sort logic

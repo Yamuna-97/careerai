@@ -687,45 +687,128 @@ Note: 'tailored_resume' MUST contain the full updated resume dictionary structur
 # ── 6. Resume Generation (Pro Model) ─────────────────────────────────────────
 def generate_resume(user_profile: Dict[str, Any], target_role: str = "") -> Dict[str, Any]:
     """
-    Generate a full structured professional resume from user profile inputs.
+    Generate a full structured professional resume from user profile inputs or target role.
     Task: resume_generation -> GEMINI_PRO_MODEL
     """
-    pruned = _prune_resume_context(user_profile)
-    role_str = target_role or "Software Engineer"
+    pruned = _prune_resume_context(user_profile) if user_profile else {}
+    role_str = target_role or (user_profile.get("personal", {}).get("title") if user_profile else "") or "Senior Software Engineer"
+    candidate_name = pruned.get("personal", {}).get("fullName") or "Jordan Taylor"
+
+    has_custom_data = bool(pruned.get("experience") or pruned.get("education") or pruned.get("skills"))
+
+    if has_custom_data:
+        generation_instruction = f"""
+Enhance, tailor, and elevate the candidate's existing background for the target role: '{role_str}'.
+Preserve the candidate's core background, but upgrade the bullet points using the STAR method (Action + Context + Quantified Impact), optimize technical keywords for ATS, and sharpen the professional summary.
+Candidate Inputs:
+{json.dumps(pruned, indent=2)}
+"""
+    else:
+        generation_instruction = f"""
+Generate an exceptional, high-impact, realistic resume from scratch tailored for the target role: '{role_str}'.
+Candidate Name: {candidate_name}
+Include:
+1. An executive summary (2-3 sentences) highlighting core domain expertise, tech stack, and key value delivered.
+2. 2-3 realistic, high-impact professional experience positions at notable technology companies with 3-4 STAR-method bullet points each (featuring realistic metrics, percentages, throughput numbers, cost savings).
+3. 2 impressive real-world technical projects demonstrating architecture and engineering depth.
+4. Comprehensive categorized skills (Technical, Frameworks, Cloud & Tools, Architecture).
+5. Relevant higher education (Degree, University, Graduation Year, Honors/GPA).
+6. 2 relevant industry certifications and key career achievements.
+"""
 
     prompt = f"""
-You are an expert resume architect. Generate a polished professional resume for the target role of '{role_str}'.
-
-{SAFETY_PREAMBLE}
-Use ONLY the provided user profile details below. Do NOT invent fake companies or degrees.
-
-User Profile Inputs:
-{json.dumps(pruned, indent=2)}
+You are an elite Google AI Resume Architect and Executive Career Coach.
+{generation_instruction}
 
 Target Role: {role_str}
 
-Return ONLY valid JSON containing a complete resume structure:
+CRITICAL: Return ONLY valid JSON matching this exact structure:
 {{
   "target_role": "{role_str}",
   "resume_data": {{
     "personal": {{
-      "fullName": "{pruned.get('personal', {}).get('fullName', 'Professional Candidate')}",
+      "fullName": "{candidate_name}",
       "title": "{role_str}",
-      "email": "{pruned.get('personal', {}).get('email', '')}",
-      "phone": "{pruned.get('personal', {}).get('phone', '')}",
-      "location": "{pruned.get('personal', {}).get('location', '')}",
-      "linkedin": "",
-      "github": "",
-      "portfolio": "",
+      "email": "jordan.taylor.career@gmail.com",
+      "phone": "+1 (555) 234-8901",
+      "location": "San Francisco, CA",
+      "linkedin": "linkedin.com/in/jordantaylor-lead",
+      "github": "github.com/jordantaylor-dev",
+      "portfolio": "jordantaylor.dev",
       "profileImage": ""
     }},
-    "summary": "Craft a 2-3 sentence impactful summary based on user details...",
-    "education": [],
-    "experience": [],
-    "projects": [],
-    "skills": [],
-    "certifications": [],
-    "achievements": []
+    "summary": "Impactful 2-3 sentence executive summary with key achievements and specializations...",
+    "education": [
+      {{
+        "id": "1",
+        "institution": "University of California, Berkeley",
+        "degree": "B.S. in Computer Science",
+        "fieldOfStudy": "Computer Science",
+        "startDate": "2016",
+        "endDate": "2020",
+        "grade": "3.88 GPA",
+        "description": "Dean's Honor List, Focus on Distributed Systems and Machine Learning."
+      }}
+    ],
+    "experience": [
+      {{
+        "id": "1",
+        "company": "Apex Cloud Systems",
+        "position": "Lead Software Engineer",
+        "location": "San Francisco, CA",
+        "startDate": "2022",
+        "endDate": "Present",
+        "currentlyWorking": true,
+        "description": "Led architectural design and deployment of distributed microservices processing 15M+ daily requests with 99.99% uptime.\\nOptimized PostgreSQL querying and Redis cluster caching, reducing p99 API latency by 42%.\\nMentored team of 7 engineers in modern CI/CD practices, cutting deployment cycle times from 3 days to 45 minutes."
+      }},
+      {{
+        "id": "2",
+        "company": "Vanguard Next Technologies",
+        "position": "Senior Full Stack Engineer",
+        "location": "San Francisco, CA",
+        "startDate": "2020",
+        "endDate": "2022",
+        "currentlyWorking": false,
+        "description": "Engineered real-time reactive web application components in React, TypeScript, and FastAPI for 250k+ active business users.\\nAutomated data processing pipelines handling 8TB+ monthly data ingest using Python and Apache Kafka."
+      }}
+    ],
+    "projects": [
+      {{
+        "id": "1",
+        "name": "Cloud-Scale Telemetry & Observability Engine",
+        "technologies": "Python, FastAPI, React, Docker, Redis, Kubernetes",
+        "description": "Real-time distributed telemetry collector and analytics dashboard visualizing microservice performance metrics.",
+        "githubUrl": "github.com/jordantaylor-dev/telemetry-engine",
+        "liveUrl": "telemetry-engine.dev"
+      }}
+    ],
+    "skills": [
+      {{"id": "1", "name": "Python", "category": "Technical", "level": "Expert"}},
+      {{"id": "2", "name": "TypeScript / JavaScript", "category": "Technical", "level": "Expert"}},
+      {{"id": "3", "name": "React", "category": "Frameworks", "level": "Expert"}},
+      {{"id": "4", "name": "FastAPI / Node.js", "category": "Frameworks", "level": "Advanced"}},
+      {{"id": "5", "name": "PostgreSQL", "category": "Technical", "level": "Advanced"}},
+      {{"id": "6", "name": "Docker & Kubernetes", "category": "Tools", "level": "Advanced"}},
+      {{"id": "7", "name": "AWS (ECS, Lambda, S3)", "category": "Tools", "level": "Advanced"}},
+      {{"id": "8", "name": "System Architecture & Microservices", "category": "Technical", "level": "Expert"}}
+    ],
+    "certifications": [
+      {{
+        "id": "1",
+        "name": "AWS Certified Solutions Architect – Professional",
+        "issuer": "Amazon Web Services",
+        "issueDate": "2023",
+        "credentialUrl": ""
+      }}
+    ],
+    "achievements": [
+      {{
+        "id": "1",
+        "title": "Engineering Excellence Award 2023",
+        "description": "Recognized for architecting core distributed payment infrastructure handling $40M+ in transactions.",
+        "date": "2023"
+      }}
+    ]
   }}
 }}
 """
@@ -733,7 +816,7 @@ Return ONLY valid JSON containing a complete resume structure:
     parsed = clean_and_parse_json(raw)
 
     if "resume_data" not in parsed or not isinstance(parsed["resume_data"], dict):
-        parsed["resume_data"] = user_profile
+        parsed["resume_data"] = user_profile or {}
 
     parsed["target_role"] = role_str
     validated = ResumeGenerateResponse(**parsed)

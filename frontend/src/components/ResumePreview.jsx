@@ -1,444 +1,479 @@
 import React from 'react';
 
 const DEFAULT_SHOWCASE = {
-  fullName: "Alex Morgan",
-  title: "Senior Software Engineer",
-  email: "alex.morgan@example.com",
-  phone: "+1 (555) 019-2834",
+  fullName: "Sarah Jenkins",
+  title: "Staff Distributed Systems Architect",
+  email: "sarah.jenkins@cloudscale.io",
+  phone: "+1 (555) 438-9210",
   location: "San Francisco, CA",
-  linkedin: "linkedin.com/in/alexmorgan",
-  github: "github.com/alexmorgan",
-  portfolio: "alexmorgan.dev",
-  summary: "Results-driven Software Engineer with 6+ years of experience designing, architecting, and scaling high-performance web applications, distributed systems, and modern cloud architectures.",
+  linkedin: "linkedin.com/in/sarahjenkins-cloud",
+  github: "github.com/sarahjenkins",
+  portfolio: "sarahjenkins.dev",
+  summary: "Staff Systems Architect with 8+ years specializing in distributed cloud infrastructure, high-throughput microservices, and AI-accelerated backends. Proven track record scaling systems to 25M+ daily requests with 99.999% reliability.",
   experience: [
     {
       id: "1",
-      role: "Lead Software Engineer",
-      company: "Apex Tech Innovations",
+      role: "Staff Cloud Infrastructure Architect",
+      company: "Apex Cloud Innovations",
       location: "San Francisco, CA",
-      period: "2021 – Present",
+      period: "2022 – Present",
       bullets: [
-        "Architected and deployed microservices handling 10M+ daily API requests with 99.99% uptime.",
-        "Led a cross-functional engineering team of 8 engineers across frontend, backend, and cloud infra.",
-        "Optimized PostgreSQL queries and Redis caching, reducing p99 latency by 35%."
+        "Architected multi-region Kubernetes platform across AWS and GCP, handling 25M+ daily API requests with 99.999% SLA.",
+        "Engineered distributed caching and query optimization layers in Go and Redis, slashing p99 latency from 140ms to 18ms.",
+        "Led cross-functional team of 12 cloud and backend engineers, driving zero-downtime microservices migration for Fortune 500 clients."
       ]
     },
     {
       id: "2",
-      role: "Full Stack Developer",
-      company: "Vanguard Digital Systems",
+      role: "Senior Distributed Systems Engineer",
+      company: "Vanguard Scale Systems",
       location: "New York, NY",
-      period: "2018 – 2021",
+      period: "2019 – 2022",
       bullets: [
-        "Engineered responsive React web interfaces and scalable RESTful APIs in Python and FastAPI.",
-        "Integrated automated CI/CD pipelines reducing deployment friction and release turnaround by 50%."
+        "Constructed real-time event streaming pipeline processing 12TB+ daily telemetry data using Apache Kafka and Python FastAPI.",
+        "Automated continuous delivery pipelines with ArgoCD and Terraform, reducing release cycle time by 65%."
       ]
     }
   ],
   education: [
     {
       id: "1",
-      degree: "B.S. in Computer Science",
+      degree: "M.S. in Computer Science",
       school: "University of California, Berkeley",
-      period: "2014 – 2018",
-      grade: "3.85 GPA"
+      period: "2017 – 2019",
+      grade: "3.94 GPA"
+    },
+    {
+      id: "2",
+      degree: "B.S. in Computer Engineering",
+      school: "University of Washington",
+      period: "2013 – 2017",
+      grade: "3.88 GPA"
     }
   ],
   skills: [
-    { id: "1", name: "Python", category: "Programming Languages" },
-    { id: "2", name: "JavaScript / TypeScript", category: "Programming Languages" },
-    { id: "3", name: "React", category: "Frameworks" },
-    { id: "4", name: "FastAPI", category: "Frameworks" },
-    { id: "5", name: "PostgreSQL", category: "Databases" },
-    { id: "6", name: "Docker", category: "Tools & Tech" },
-    { id: "7", name: "AWS", category: "Tools & Tech" },
-    { id: "8", name: "Git", category: "Tools & Tech" },
-    { id: "9", name: "Redis", category: "Tools & Tech" },
-    { id: "10", name: "System Architecture", category: "Other" }
+    { id: "1", name: "Go & Python", category: "Programming Languages" },
+    { id: "2", name: "TypeScript & Rust", category: "Programming Languages" },
+    { id: "3", name: "Kubernetes & Docker", category: "Tools & Tech" },
+    { id: "4", name: "AWS & Google Cloud Platform", category: "Tools & Tech" },
+    { id: "5", name: "Apache Kafka & Redis", category: "Databases" },
+    { id: "6", name: "PostgreSQL & ScyllaDB", category: "Databases" },
+    { id: "7", name: "Distributed Consensus (Raft)", category: "Other" },
+    { id: "8", name: "Terraform & Helm", category: "Tools & Tech" }
   ],
   projects: [
     {
       id: "1",
-      name: "Cloud-Scale Telemetry Engine",
-      technologies: "FastAPI, React, Docker, Redis",
+      name: "High-Throughput Global Event Mesh",
+      technologies: "Go, gRPC, Kafka, Kubernetes, Envoy",
       startDate: "2023",
       endDate: "2024",
-      description: "Real-time telemetry and metrics analytics dashboard processing distributed container logs."
+      description: "Open-source distributed event bus capable of routing 500k messages/sec with sub-millisecond serialization latency."
     }
   ]
 };
 
 const TEMPLATE_SHOWCASES = {
   '1': {
-    fullName: "Your Name Here",
-    title: "Your Position or Tagline Here",
-    email: "your_name@email.com",
-    phone: "000-00-0000",
-    location: "Location, COUNTRY",
-    linkedin: "your_id",
-    github: "your_id",
-    portfolio: "www.homepage.com",
-    summary: "",
+    fullName: "Dr. Aris Vance",
+    title: "Principal AI Research Scientist",
+    email: "aris.vance@stanford.alumni.edu",
+    phone: "+1 (555) 782-1904",
+    location: "Palo Alto, CA",
+    linkedin: "linkedin.com/in/arisvance-ai",
+    github: "github.com/arisvance",
+    portfolio: "arisvance.ai",
+    summary: "Principal AI Scientist with 7+ years researching multi-modal foundation models, LLM alignment, and reinforcement learning with human feedback (RLHF). Published 14 peer-reviewed papers across NeurIPS, ICML, and ICLR.",
     experience: [
       {
         id: "1",
-        role: "Job Title 1",
-        company: "Company 1",
-        period: "Month 20XX -- Ongoing",
-        location: "Location",
-        bullets: ["Job description 1", "Job description 2"]
+        role: "Lead Foundation Model Researcher",
+        company: "Nexus AI Laboratories",
+        period: "2022 – Present",
+        location: "Palo Alto, CA",
+        bullets: [
+          "Co-authored core architectural modifications for 70B parameter multi-modal transformer, reducing inference KV-cache memory by 38%.",
+          "Engineered distributed RLHF alignment pipeline scaling across 512 H100 GPUs with 94% linear throughput efficiency.",
+          "Supervised a research group of 6 PhD scientists developing self-supervised reasoning mechanisms for complex code generation."
+        ]
       },
       {
         id: "2",
-        role: "Job Title 2",
-        company: "Company 2",
-        period: "Month 20XX -- Ongoing",
-        location: "Location",
-        bullets: ["Job description 1", "Job description 2"]
+        role: "Senior Machine Learning Scientist",
+        company: "DeepScale Dynamics",
+        period: "2019 – 2022",
+        location: "Mountain View, CA",
+        bullets: [
+          "Developed sparse-mixture-of-experts (MoE) routing algorithm improving token prediction accuracy by 14.2% on STEM benchmarks.",
+          "Optimized PyTorch FlashAttention kernels delivering a 2.4x speedup on long-context sequence processing."
+        ]
       }
     ],
     education: [
       {
         id: "1",
-        degree: "PhD",
-        school: "Some University",
-        period: "2010 -- 2014"
+        degree: "Ph.D. in Artificial Intelligence & Computer Science",
+        school: "Stanford University",
+        period: "2015 – 2019",
+        grade: "Distinction"
       }
     ],
     skills: [
-      { id: "1", name: "Python", category: "Programming Languages" },
-      { id: "2", name: "LaTeX", category: "Programming Languages" },
-      { id: "3", name: "Data Analysis", category: "Other" }
+      { id: "1", name: "PyTorch & JAX", category: "Programming Languages" },
+      { id: "2", name: "CUDA & Triton Kernels", category: "Programming Languages" },
+      { id: "3", name: "DeepSpeed & Megatron-LM", category: "Frameworks" },
+      { id: "4", name: "LLM Alignment & RLHF", category: "Machine Learning" },
+      { id: "5", name: "Distributed GPU Clusters", category: "Tools & Tech" }
     ],
     projects: [
       {
         id: "1",
-        name: "Project 1",
-        technologies: "Funding agency/institution",
-        description: "Details"
-      },
-      {
-        id: "2",
-        name: "Project 2",
-        technologies: "Funding agency/institution",
-        description: "Project duration"
+        name: "FlashAlign: Open Source RLHF Engine",
+        technologies: "JAX, PyTorch, Ray Distributed, Weights & Biases",
+        description: "High-throughput preference optimization library enabling 3x faster reward modeling on multi-node GPU clusters."
       }
     ]
   },
   '2': {
-    fullName: "Your Name Here, Ph.D.",
-    title: "Physicist",
-    email: "example@gmail.com",
-    phone: "",
-    location: "",
-    linkedin: "example",
-    github: "overleaf_example",
-    portfolio: "http://example.example.org/",
-    summary: "",
+    fullName: "Dr. Elena Rostova, Ph.D.",
+    title: "Lead Computational & Quantum Physicist",
+    email: "elena.rostova@quantum-cern.org",
+    phone: "+41 22 767 1100",
+    location: "Geneva, Switzerland",
+    linkedin: "linkedin.com/in/elena-rostova-phd",
+    github: "github.com/erostova-quantum",
+    portfolio: "rostova-research.org",
+    summary: "Senior Computational Physicist specializing in variational quantum algorithms, high-energy particle simulations, and quantum error mitigation on noisy intermediate-scale quantum (NISQ) devices.",
     experience: [
       {
         id: "1",
-        role: "Job Title 1",
-        company: "Company 1",
-        period: "Month 20XX -- Ongoing",
-        bullets: ["Job description 1", "Job description 2"]
+        role: "Senior Quantum Algorithms Researcher",
+        company: "European Organization for Nuclear Research (CERN)",
+        period: "2021 – Present",
+        bullets: [
+          "Formulated hybrid quantum-classical algorithms (VQE/QAOA) simulating quantum many-body dynamics on 127-qubit superconducting hardware.",
+          "Parallelized lattice quantum chromodynamics (LQCD) calculations on EuroHPC supercomputers, accelerating converge time by 4x."
+        ]
+      },
+      {
+        id: "2",
+        role: "Postdoctoral Research Fellow",
+        company: "MIT Quantum Engineering Center",
+        period: "2018 – 2021",
+        bullets: [
+          "Implemented novel tensor network simulation algorithms in C++ and Julia, modeling 60-qubit entangled states with 99.8% fidelity."
+        ]
       }
     ],
     education: [
       {
         id: "1",
-        degree: "Ph.D. in Physics",
-        school: "Unseen University",
-        period: "1999"
+        degree: "Ph.D. in Theoretical & Quantum Physics",
+        school: "ETH Zurich",
+        period: "2014 – 2018"
       }
     ],
     skills: [
-      { id: "1", name: "Physics", category: "Programming Languages" }
+      { id: "1", name: "Python, Julia, C++", category: "Programming Languages" },
+      { id: "2", name: "Qiskit, Cirq, PennyLane", category: "Frameworks" },
+      { id: "3", name: "HPC MPI / OpenMP", category: "Tools & Tech" }
     ],
     projects: []
   },
   '3': {
-    fullName: "Your Name",
-    title: "Robotics Researcher",
-    email: "your.email@example.com",
-    phone: "+00 00 000 0000",
-    location: "City, Country",
-    linkedin: "xxx.com/in/yourprofile",
-    github: "xxx.com/yourusername",
-    portfolio: "Scholar Profile",
-    summary: "Robotics researcher specializing in Vision-Language-Action (VLA) models and robot learning for complex manipulation. I build end-to-end systems across simulation and hardware.",
+    fullName: "Marcus Chen",
+    title: "Lead Robotics & Autonomous Systems Engineer",
+    email: "marcus.chen@autonomy-labs.io",
+    phone: "+1 (412) 555-0182",
+    location: "Pittsburgh, PA",
+    linkedin: "linkedin.com/in/marcus-chen-robotics",
+    github: "github.com/marcuschen-robotics",
+    portfolio: "marcuschen.me",
+    summary: "Autonomous systems engineer specializing in Vision-Language-Action (VLA) foundation models, real-time spatial SLAM, and embedded ROS 2 control systems for industrial manipulators and mobile robots.",
     experience: [
       {
         id: "1",
-        role: "Robotics Research Intern",
-        company: "Tech Company or Research Lab",
-        period: "May 2025 -- Aug 2025",
+        role: "Lead Robotics Software Engineer",
+        company: "Veritas Robotics & Automation",
+        period: "2022 – Present",
         bullets: [
-          "Engineered a VR-integrated teleoperation suite for industrial manipulators to facilitate large-scale VLA data collection.",
-          "Benchmarked deployment performance of state-of-the-art foundation models on physical hardware.",
-          "Investigated novel techniques for in-context policy adaptation in unstructured environments."
+          "Engineered end-to-end teleoperation and reinforcement learning pipeline for 7-DOF robotic arms, achieving 98.4% pick-and-place task success.",
+          "Integrated real-time LiDAR-inertial odometry and 3D Gaussian Splatting for sub-centimeter warehouse navigation in dynamic environments.",
+          "Optimized C++ control loops on NVIDIA Jetson Orin compute modules running at 500Hz deterministic frequency."
         ]
       },
       {
         id: "2",
-        role: "Software Engineering Intern",
-        company: "Tech Company, Location",
-        period: "Sept 2023 -- May 2024",
+        role: "Robotics Perception Engineer",
+        company: "Carnegie Autonomy Systems",
+        period: "2019 – 2022",
         bullets: [
-          "Programmed C# and C++ middleware for automated hardware validation systems.",
-          "Optimized legacy GUI modules, resulting in improved system response times during testing.",
-          "Collaborated with the systems team to integrate firmware updates for semiconductor equipment."
+          "Developed multi-camera sensor fusion pipeline for autonomous forklifts, reducing blind-spot obstacles false-positives by 72%."
         ]
       }
     ],
     education: [
       {
         id: "1",
-        degree: "MSc in Robotics",
-        school: "University Name, Location",
-        period: "2024 -- 2026",
-        grade: "3.88 GPA"
-      },
-      {
-        id: "2",
-        degree: "B.Eng in Electrical Engineering",
-        school: "University Name, Location",
-        period: "2019 -- 2023",
+        degree: "M.S. in Robotic Systems Development",
+        school: "Carnegie Mellon University",
+        period: "2017 – 2019",
         grade: "3.92 GPA"
       }
     ],
     skills: [
-      { id: "1", name: "Robot Learning", category: "Programming Languages" },
-      { id: "2", name: "Geometric Computer Vision", category: "Programming Languages" },
-      { id: "3", name: "Teleoperation", category: "Other" }
+      { id: "1", name: "C++20, Python, Rust", category: "Programming Languages" },
+      { id: "2", name: "ROS 2, MoveIt, Gazebo", category: "Frameworks" },
+      { id: "3", name: "TensorRT & CUDA", category: "Tools & Tech" },
+      { id: "4", name: "Spatial SLAM & Point Clouds", category: "Other" }
     ],
     projects: []
   },
   '4': {
-    fullName: "Harshibar",
-    title: "Software Engineer",
-    email: "hello@email.com",
-    phone: "555.555.5555",
-    location: "U.S. Citizen",
-    linkedin: "harshibar",
-    github: "harshibar",
-    portfolio: "",
-    summary: "",
+    fullName: "Sarah Jenkins",
+    title: "Staff Distributed Systems & Cloud Architect",
+    email: "sarah.jenkins@cloudscale.io",
+    phone: "+1 (555) 438-9210",
+    location: "San Francisco, CA",
+    linkedin: "linkedin.com/in/sarahjenkins-cloud",
+    github: "github.com/sarahjenkins",
+    portfolio: "sarahjenkins.dev",
+    summary: "Staff Systems Architect with 8+ years specializing in distributed cloud infrastructure, high-throughput microservices, and AI-accelerated backends. Scaled architectures to 25M+ daily requests with 99.999% reliability.",
     experience: [
       {
         id: "1",
-        role: "Creator",
-        company: "YouTube",
-        period: "Aug. 2019 -- Present",
+        role: "Staff Cloud Infrastructure Architect",
+        company: "Apex Cloud Innovations",
+        period: "2022 – Present",
         location: "San Francisco, CA",
         bullets: [
-          "Grew channel to 60k subscribers in 1.5 years; created 80+ videos on tech and productivity",
-          "Conducted A/B testing on titles and thumbnails; increased video impressions by 2.5M in 3 months",
-          "Designed a Notion workflow to streamline video production and roadmapping; boosted productivity by 20%"
+          "Architected multi-region Kubernetes platform across AWS and GCP, handling 25M+ daily API requests with 99.999% SLA.",
+          "Engineered distributed caching and query optimization layers in Go and Redis, slashing p99 latency from 140ms to 18ms.",
+          "Led cross-functional team of 12 cloud and backend engineers, driving zero-downtime microservices migration for Fortune 500 clients."
         ]
       },
       {
         id: "2",
-        role: "Software Engineer",
-        company: "Google Verily",
-        period: "Aug. 2018 -- Sept. 2019",
+        role: "Senior Full Stack Engineer",
+        company: "Stripe Infrastructure Partner",
+        period: "2019 – 2022",
         location: "San Francisco, CA",
         bullets: [
-          "Led front-end development of a dashboard to process 50k blood samples and detect early-stage cancer",
-          "Rebuilt a Quality Control product with input from 20 cross-functional stakeholders, saving $1M annually"
-        ]
-      }
-    ],
-    education: [],
-    skills: [],
-    projects: []
-  },
-  '5': {
-    fullName: "Raging Bull",
-    title: "Data Scientist & Tiger of the Year",
-    email: "mail@dot.com",
-    phone: "+1 212 355 3000",
-    location: "301 Park Ave, New-York, NY, USA",
-    linkedin: "laguer.github.io/sixtysecondscv",
-    github: "LaGuer/SixtySecondsCV",
-    portfolio: "",
-    summary: "The giant panda is a terrestrial animal and primarily spends its life roaming and feeding in the bamboo forests of the Qinling Mountains.",
-    experience: [
-      {
-        id: "1",
-        role: "CEO The Panda Way",
-        company: "Start Up",
-        period: "currently",
-        bullets: [
-          "Chief executive officer, Head developer and yoga ambassador of 'The Panda Way' - A company from pandas for pandas."
-        ]
-      },
-      {
-        id: "2",
-        role: "Data Scientist",
-        company: "Amis University",
-        period: "2018 -- 2019",
-        bullets: [
-          "Researching the impact of adequate AMIS nutrition compared to conventional feeding methods."
+          "Constructed real-time telemetry processing pipeline ingesting 12TB+ daily transaction data using Kafka and FastAPI.",
+          "Automated infrastructure-as-code delivery pipelines with ArgoCD and Terraform, reducing release turnaround by 65%."
         ]
       }
     ],
     education: [
       {
         id: "1",
-        degree: "Post-Doc Panda Studies",
-        school: "Panda Academy",
-        period: "2009 -- 2010",
-        description: "In-depth studies on the impact of bamboo nutrition for young pandas."
-      },
-      {
-        id: "2",
-        degree: "Master Studies Panda Science",
-        school: "Panda Academy",
-        period: "2006 -- 2008",
-        description: "Focus: Advanced rice hat studies and nouveau rain-reflecting cover materials."
+        degree: "B.S. in Computer Science & Engineering",
+        school: "University of California, Berkeley",
+        period: "2015 – 2019",
+        grade: "3.90 GPA"
       }
     ],
     skills: [
-      { id: "1", name: "Wearing asian rice hats", category: "Programming Languages" },
-      { id: "2", name: "Playing Chess", category: "Programming Languages" },
-      { id: "3", name: "Playing the bamboo stick", category: "Other" }
+      { id: "1", name: "Go, Python, TypeScript", category: "Programming Languages" },
+      { id: "2", name: "React, FastAPI, Next.js", category: "Frameworks" },
+      { id: "3", name: "Kubernetes, Docker, Terraform", category: "Tools & Tech" },
+      { id: "4", name: "PostgreSQL, Redis, Kafka", category: "Databases" }
+    ],
+    projects: []
+  },
+  '5': {
+    fullName: "Dr. Devraj Mukherjee",
+    title: "Principal Quantitative Data Scientist",
+    email: "devraj.mukherjee@quantedge.com",
+    phone: "+1 (212) 555-8930",
+    location: "New York, NY",
+    linkedin: "linkedin.com/in/devraj-mukherjee-quant",
+    github: "github.com/devrajmukherjee",
+    portfolio: "devrajquant.io",
+    summary: "Quantitative Researcher and ML Systems Lead with 9+ years architecting algorithmic trading strategies, high-frequency feature pipelines, and deep neural pricing models across global equity and derivative markets.",
+    experience: [
+      {
+        id: "1",
+        role: "Head of Quantitative Machine Learning",
+        company: "Vanguard Alpha Capital",
+        period: "2021 – Present",
+        bullets: [
+          "Engineered statistical arbitrage predictive alpha model managing $180M AUM, achieving a 2.45 Sharpe ratio over 3 years.",
+          "Built ultra-low latency feature store streaming 500,000 tick updates/sec with sub-millisecond feature compute overhead."
+        ]
+      },
+      {
+        id: "2",
+        role: "Senior Quantitative Researcher",
+        company: "Citadel Technology Partners",
+        period: "2017 – 2021",
+        bullets: [
+          "Developed deep reinforcement learning market-making agents, improving execution capture on fragmented exchanges by 22 bps."
+        ]
+      }
+    ],
+    education: [
+      {
+        id: "1",
+        degree: "Ph.D. in Financial Engineering & Machine Learning",
+        school: "Columbia University",
+        period: "2013 – 2017"
+      }
+    ],
+    skills: [
+      { id: "1", name: "Python, C++, R", category: "Programming Languages" },
+      { id: "2", name: "PyTorch, Ray, Polars", category: "Frameworks" },
+      { id: "3", name: "Time Series & Stochastic Calculus", category: "Other" }
     ],
     projects: []
   },
   '6': {
-    fullName: "Your Name",
-    title: "Your Program",
-    email: "youremail@email.com",
-    phone: "xxxxxxxxxx",
-    location: "Indian Institute Of Information Technology, Vadodara",
-    linkedin: "LinkedIn Profile",
-    github: "GitHub Profile",
-    portfolio: "",
-    summary: "",
+    fullName: "Priya Sharma",
+    title: "Lead Cloud Security & Solutions Architect",
+    email: "priya.sharma@cyberdefense.in",
+    phone: "+91 98201 45678",
+    location: "Bengaluru, India",
+    linkedin: "linkedin.com/in/priyasharma-sec",
+    github: "github.com/priyasharma-cloud",
+    portfolio: "priyasharma.cloud",
+    summary: "Cloud Security Architect with 8+ years leading enterprise cloud transformations, zero-trust infrastructure, SOC 2 / ISO 27001 compliance, and automated DevSecOps guardrails across large-scale AWS ecosystems.",
     experience: [
       {
         id: "1",
-        role: "Your Position",
-        company: "Your Company",
-        period: "Year",
-        bullets: ["Detail description of work done in this position or organization"]
-      }
-    ],
-    education: [
-      {
-        id: "1",
-        degree: "Your Degree and Course name",
-        school: "Indian Institute of Information Technology, Vadodara",
-        period: "Year",
-        grade: "CGPA/Percentage: xxx"
-      }
-    ],
-    skills: [
-      { id: "1", name: "Your Skill 1", category: "Programming Languages" }
-    ],
-    projects: []
-  },
-  '7': {
-    fullName: "Students Name",
-    title: "B.Tech Student",
-    email: "something@example.com",
-    phone: "XXXXXXXXX",
-    location: "Indian Institute Of Technology, Guwahati",
-    linkedin: "LINKEDINUSERID",
-    github: "USERID",
-    portfolio: "https://example.com",
-    summary: "",
-    experience: [
-      {
-        id: "1",
-        role: "Project Intern",
-        company: "Tech Labs",
-        period: "2018 -- Present",
+        role: "Principal Cloud Security Architect",
+        company: "Infosys Cloud Security Labs",
+        period: "2021 – Present",
         bullets: [
-          "Developed features for automated verification",
-          "Iterated on core models"
+          "Designed and enforced automated Zero-Trust architecture across 140+ AWS enterprise accounts protecting $2B in fintech assets.",
+          "Built real-time automated threat-detection pipeline integrating AWS GuardDuty, Security Hub, and custom serverless remediations."
         ]
       }
     ],
     education: [
       {
         id: "1",
-        degree: "B.Tech. Major",
-        school: "Indian Institute of Technology, Guwahati",
-        period: "2016-Present",
-        grade: "0.00 (Current)"
+        degree: "B.Tech in Computer Science & Engineering",
+        school: "Indian Institute of Technology (IIT Bombay)",
+        period: "2015 – 2019",
+        grade: "9.4 CGPA"
       }
     ],
     skills: [
-      { id: "1", name: "Computer Science", category: "Programming Languages" }
+      { id: "1", name: "Python, Go, Bash", category: "Programming Languages" },
+      { id: "2", name: "AWS Security & Terraform", category: "Tools & Tech" },
+      { id: "3", name: "Kubernetes Security (Falco, OPA)", category: "Other" }
     ],
     projects: []
   },
-  '8': {
-    fullName: "MY NAME",
-    title: "Curriculum vitae",
-    email: "email@email.email",
-    phone: "(123)~ 456-7890",
-    location: "Ville, Province, Pays",
-    linkedin: "thelink",
-    github: "GitHub",
-    portfolio: "",
-    summary: "I am a self-motivated professional with extensive domain expertise.",
+  '7': {
+    fullName: "David K. Reynolds",
+    title: "Senior Product Engineering Lead",
+    email: "david.reynolds@saasplatform.com",
+    phone: "+1 (617) 555-0144",
+    location: "Boston, MA",
+    linkedin: "linkedin.com/in/davidkreynolds",
+    github: "github.com/davidreynolds-dev",
+    portfolio: "davidreynolds.tech",
+    summary: "Product Engineering Lead with 7+ years driving full-lifecycle SaaS product architecture, rapid experimentation, and AI workflow integration. Grew B2B SaaS revenue from $1.5M to $18M ARR.",
     experience: [
       {
         id: "1",
-        role: "Job 1",
-        company: "My employer",
-        period: "2000 - present",
-        bullets: ["My job was to ..."]
+        role: "Director of Product Engineering",
+        company: "Acumen SaaS Technologies",
+        period: "2021 – Present",
+        bullets: [
+          "Led 18 engineers across 3 cross-functional product squads delivering generative AI workflow features that boosted user retention by 34%.",
+          "Re-architected core frontend and GraphQL APIs, improving core web vitals and reducing page render times by 55%."
+        ]
       }
     ],
     education: [
       {
         id: "1",
-        degree: "Master's degree",
-        school: "University XXX",
-        period: "1997 - Expected 2025",
-        grade: "5.50/4.33"
+        degree: "B.S. in Computer Science",
+        school: "Harvard University",
+        period: "2014 – 2018",
+        grade: "Magna Cum Laude"
       }
     ],
     skills: [
-      { id: "1", name: "Deserving a job", category: "Programming Languages" },
-      { id: "2", name: "Cooking", category: "Other" }
+      { id: "1", name: "TypeScript, React, Next.js", category: "Programming Languages" },
+      { id: "2", name: "Node.js, GraphQL, PostgreSQL", category: "Frameworks" },
+      { id: "3", name: "Product Analytics & Growth", category: "Other" }
+    ],
+    projects: []
+  },
+  '8': {
+    fullName: "Claire Moreau",
+    title: "Management & AI Strategy Consultant",
+    email: "claire.moreau@instrategy.eu",
+    phone: "+33 1 42 68 55 00",
+    location: "Paris, France",
+    linkedin: "linkedin.com/in/clairemoreau-strategy",
+    github: "github.com/clairemoreau",
+    portfolio: "moreau-advisory.com",
+    summary: "Management Consultant specializing in Enterprise AI adoption, digital operating models, and technology modernization for Fortune 500 industrial and banking corporations.",
+    experience: [
+      {
+        id: "1",
+        role: "Senior Strategy Manager – AI & Technology",
+        company: "McKinsey & Company Practice Partner",
+        period: "2020 – Present",
+        bullets: [
+          "Orchestrated generative AI roadmap for European multinational bank, unlocking €45M in annual operational efficiency.",
+          "Advised C-suite leadership on AI governance, regulatory risk compliance (EU AI Act), and data platform re-architecture."
+        ]
+      }
+    ],
+    education: [
+      {
+        id: "1",
+        degree: "MBA in Strategy & Technology",
+        school: "INSEAD",
+        period: "2018 – 2020"
+      }
+    ],
+    skills: [
+      { id: "1", name: "Enterprise AI Strategy", category: "Other" },
+      { id: "2", name: "Digital Transformation & M&A", category: "Other" },
+      { id: "3", name: "Financial Modeling & Valuation", category: "Other" }
     ],
     projects: []
   },
   '9': {
     fullName: "Nicola Alessi",
-    title: "Web Developer",
-    email: "alessi@gmail.com",
-    phone: "+39 123 456 789",
-    location: "Rome, Italy",
-    linkedin: "nicolaalessi",
-    github: "nicolaalessi",
-    portfolio: "",
-    summary: "",
+    title: "Principal UI Systems & WebGL Engineer",
+    email: "nicola.alessi@creativecode.it",
+    phone: "+39 02 8739 4411",
+    location: "Milan, Italy",
+    linkedin: "linkedin.com/in/nicolaalessi-ui",
+    github: "github.com/nicolaalessi",
+    portfolio: "alessi.design",
+    summary: "Frontend systems engineer with 8+ years crafting interactive 3D WebGL graphics, design systems, and sub-60fps web applications for luxury and tech innovators.",
     experience: [
       {
         id: "1",
-        role: "Web Developer",
-        company: "Alessi S.r.l.",
-        period: "2012 -- Present",
-        bullets: ["Designed and developed responsive websites and web applications."]
+        role: "Principal Frontend Architect",
+        company: "Studio Alessi Digital",
+        period: "2020 – Present",
+        bullets: [
+          "Engineered high-performance WebGL 3D configuration engine in Three.js and React Three Fiber with zero dropped frames.",
+          "Designed multi-brand unified design system adopted by 40+ production web applications."
+        ]
       }
     ],
     education: [
       {
         id: "1",
-        degree: "B.Sc. in Computer Science",
-        school: "Sapienza University of Rome",
-        period: "2008 -- 2011"
+        degree: "M.Sc. in Computer Science & Interaction Design",
+        school: "Politecnico di Milano",
+        period: "2014 – 2017"
       }
     ],
     skills: [
-      { id: "1", name: "PHP", category: "Programming Languages" },
-      { id: "2", name: "JavaScript", category: "Programming Languages" }
+      { id: "1", name: "JavaScript / TypeScript", category: "Programming Languages" },
+      { id: "2", name: "Three.js & WebGL / WebGPU", category: "Frameworks" },
+      { id: "3", name: "React, Tailwind, Canvas", category: "Frameworks" }
     ],
     projects: []
   }
@@ -450,14 +485,18 @@ export default function ResumePreview({ resumeData, templateId = 'Modern', scale
 
   const data = (useTemplateMock || !resumeData || Object.keys(resumeData).length === 0) ? mockData : resumeData;
   
-  // Check if data is completely empty/unpopulated
+  // Check if user has entered real content
   const hasUserExp = (data.experience && data.experience.length > 0) || (data.experiences && data.experiences.length > 0);
   const hasUserEdu = (data.education && ((Array.isArray(data.education) && data.education.length > 0) || Boolean(data.education.school || data.education.degree || data.education.institution)));
-  const hasUserSkills = (data.skills && ((Array.isArray(data.skills) && data.skills.length > 0) || Object.values(data.skills).some(v => Boolean(v))));
+  const hasUserSkills = (data.skills && ((Array.isArray(data.skills) && data.skills.length > 0) || (typeof data.skills === 'object' && Object.values(data.skills).some(v => Boolean(v)))));
   const hasUserSummary = Boolean(data.summary || (data.personal && data.personal.summary));
-  const isDataEmpty = !hasUserExp && !hasUserEdu && !hasUserSkills && !hasUserSummary;
+  const hasUserName = Boolean(data.fullName || data.firstName || data.lastName || (data.personal && (data.personal.fullName || data.personal.firstName)));
+  const hasUserContact = Boolean(data.email || data.phone || data.location || (data.personal && (data.personal.email || data.personal.phone)));
 
-  const finalData = isDataEmpty ? mockData : data;
+  // If live data has ANY field filled by user, honor user's data; else fallback to mockData
+  const isDataEmpty = !useTemplateMock && !hasUserExp && !hasUserEdu && !hasUserSkills && !hasUserSummary && !hasUserName && !hasUserContact;
+
+  const finalData = (useTemplateMock || isDataEmpty) ? mockData : data;
 
   // Map numeric LaTeX template IDs to visual HTML equivalents for preview
   const tplMapping = {

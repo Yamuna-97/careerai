@@ -436,14 +436,22 @@ export default function ResumeAIStudioPage() {
     runTool(
       "generate",
       [
-        "Reading user profile inputs",
+        "Initializing Google Gemini 2.5 Pro",
         "Crafting targeted professional summary",
-        "Structuring experience & skills",
-        "Building resume payload",
+        "Structuring STAR-method achievements",
+        "Curating technical stack & industry keywords",
+        "Synthesizing complete ATS-optimized resume",
       ],
       "/generate-resume",
-      { resume_data: resumeData, target_role: targetRole, user_profile: resumeData },
-      () => saveActivity("Resume Generated", targetRole || "New Resume", {})
+      { resume_data: resumeData || {}, target_role: targetRole, user_profile: resumeData || {} },
+      (d) => {
+        if (d && d.resume_data) {
+          setResumeData(d.resume_data);
+          setResumeName(d.resume_data.personal?.fullName || targetRole || "AI Resume");
+          sessionStorage.setItem("careerai_ai_session", JSON.stringify(d.resume_data));
+        }
+        saveActivity("Resume Generated", targetRole || "New Resume", {});
+      }
     );
 
   const handleSendChatMessage = async () => {
@@ -648,40 +656,53 @@ export default function ResumeAIStudioPage() {
     if (activeTool === "generate-input")
       return (
         <ToolInputPanel
-          title="Generate Resume"
-          icon="psychology"
+          title="Generate Resume with Google AI"
+          icon="auto_awesome"
           accent="#10B981"
           onBack={() => setActiveTool(null)}
           onRun={runGenerate}
-          runLabel="Generate Resume"
-          canRun={!!resumeData}
+          runLabel="✨ Generate Full Resume"
+          canRun={!!targetRole.trim()}
         >
-          <label className="text-[12px] font-bold text-gray-700 mb-1.5 block">Select Target Role</label>
-          <input
-            value={targetRole}
-            onChange={(e) => setTargetRole(e.target.value)}
-            placeholder="e.g. Software Engineer, Frontend Developer..."
-            className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 mb-4"
-          />
-          <div className="flex flex-wrap gap-2">
-            {[
-              "Software Engineer",
-              "Frontend Developer",
-              "Backend Developer",
-              "AI/ML Engineer",
-              "Data Scientist",
-              "Data Analyst",
-              "Full Stack Developer",
-            ].map((r) => (
-              <button
-                key={r}
-                onClick={() => setTargetRole(r)}
-                className={`px-3 py-1.5 rounded-full text-[11px] font-semibold border transition-all ${targetRole === r ? "bg-emerald-600 text-white border-emerald-600" : "border-gray-200 text-gray-600"
-                  }`}
-              >
-                {r}
-              </button>
-            ))}
+          <div className="space-y-3">
+            <div>
+              <label className="text-[12px] font-bold text-gray-700 mb-1.5 block">Target Professional Role</label>
+              <input
+                value={targetRole}
+                onChange={(e) => setTargetRole(e.target.value)}
+                placeholder="e.g. Senior Machine Learning Engineer, Cloud Architect..."
+                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block mb-2">
+                Popular Role Presets:
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  "Senior Full Stack Engineer",
+                  "AI / ML Research Engineer",
+                  "Staff Cloud Architect",
+                  "Product Engineering Lead",
+                  "Quantitative Data Scientist",
+                  "Cybersecurity & DevSecOps Lead",
+                  "Principal Frontend Engineer",
+                  "Autonomous Robotics Engineer",
+                ].map((r) => (
+                  <button
+                    key={r}
+                    onClick={() => setTargetRole(r)}
+                    className={`px-3 py-1.5 rounded-full text-[11px] font-semibold border transition-all cursor-pointer ${
+                      targetRole === r
+                        ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
+                        : "border-gray-200 text-gray-600 hover:bg-emerald-50 hover:border-emerald-200"
+                    }`}
+                  >
+                    {r}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </ToolInputPanel>
       );

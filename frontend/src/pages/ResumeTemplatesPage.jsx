@@ -180,7 +180,7 @@ export default function ResumeTemplatesPage() {
   }, []);
 
   const handleUseTemplate = (templateId) => {
-    navigate(`/resume/builder`);
+    navigate(`/resume/builder?template=${templateId}`);
   };
 
   // Filter & sort logic

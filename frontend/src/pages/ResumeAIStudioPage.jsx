@@ -73,77 +73,128 @@ function ToolCard({ icon, title, description, features, buttonLabel, accent = "#
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onClick={onClick}
-      className="relative bg-white border border-gray-100 rounded-2xl p-6 cursor-pointer transition-all duration-200 hover:shadow-xl hover:-translate-y-0.5 hover:border-pink-100"
-      style={{ boxShadow: hovered ? `0 8px 32px ${accent}18` : undefined }}
+      className="relative rounded-2xl cursor-pointer transition-all duration-300 overflow-hidden group"
+      style={{
+        background: hovered ? `linear-gradient(135deg, ${accent}08, ${accent}14)` : 'white',
+        border: `1.5px solid ${hovered ? accent + '40' : '#f0f0f0'}`,
+        boxShadow: hovered ? `0 12px 40px ${accent}20, 0 0 0 1px ${accent}15` : '0 1px 4px rgba(0,0,0,0.04)',
+        transform: hovered ? 'translateY(-3px)' : 'none'
+      }}
     >
-      {badge && (
-        <span
-          className="absolute top-4 right-4 text-[10px] font-black px-2 py-0.5 rounded-full text-white"
-          style={{ background: accent }}
+      {/* Top color bar */}
+      <div className="h-1 w-full" style={{ background: `linear-gradient(90deg, ${accent}, ${accent}88)` }} />
+
+      <div className="p-5">
+        {badge && (
+          <span
+            className="absolute top-5 right-4 text-[9px] font-black px-2 py-0.5 rounded-full text-white tracking-wide"
+            style={{ background: `linear-gradient(135deg, ${accent}, ${accent}99)` }}
+          >
+            {badge}
+          </span>
+        )}
+
+        <div
+          className="w-10 h-10 rounded-xl flex items-center justify-center mb-3.5 transition-all duration-300"
+          style={{ background: hovered ? `${accent}20` : `${accent}12` }}
         >
-          {badge}
-        </span>
-      )}
-      <div className="w-11 h-11 rounded-xl flex items-center justify-center mb-4" style={{ background: `${accent}15` }}>
-        <span className="material-symbols-outlined text-xl" style={{ color: accent }}>
-          {icon}
-        </span>
+          <span className="material-symbols-outlined text-lg" style={{ color: accent }}>
+            {icon}
+          </span>
+        </div>
+
+        <h3 className="text-[14px] font-black text-gray-900 mb-1">{title}</h3>
+        <p className="text-[11px] text-gray-500 leading-relaxed mb-3.5">{description}</p>
+
+        {features && (
+          <ul className="space-y-1 mb-4">
+            {features.map((f, i) => (
+              <li key={i} className="flex items-center gap-2 text-[10.5px] text-gray-500">
+                <span className="w-1 h-1 rounded-full flex-shrink-0" style={{ background: accent }} />
+                {f}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <button
+          className="w-full py-2.5 rounded-xl text-[12px] font-bold text-white transition-all duration-200"
+          style={{ background: `linear-gradient(135deg, ${accent}, ${accent}bb)`, boxShadow: `0 4px 12px ${accent}30` }}
+        >
+          {buttonLabel}
+        </button>
       </div>
-      <h3 className="text-[15px] font-bold text-gray-900 mb-1.5">{title}</h3>
-      <p className="text-[12px] text-gray-500 leading-relaxed mb-4">{description}</p>
-      {features && (
-        <ul className="space-y-1 mb-5">
-          {features.map((f, i) => (
-            <li key={i} className="flex items-center gap-2 text-[11px] text-gray-500">
-              <span className="w-1 h-1 rounded-full flex-shrink-0" style={{ background: accent }} />
-              {f}
-            </li>
-          ))}
-        </ul>
-      )}
-      <button
-        className="w-full py-2 rounded-xl text-[12px] font-bold text-white transition-opacity hover:opacity-90"
-        style={{ background: `linear-gradient(135deg, ${accent}, ${accent}cc)` }}
-      >
-        {buttonLabel}
-      </button>
     </div>
   );
 }
 
 function LoadingState({ steps, currentStep }) {
   return (
-    <div className="flex flex-col items-center py-16 gap-6">
-      <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#EC4899] to-[#FF8A3D] flex items-center justify-center shadow-lg">
-        <span className="material-symbols-outlined text-white text-3xl animate-spin" style={{ animationDuration: "2s" }}>
-          auto_awesome
-        </span>
+    <div className="flex flex-col items-center py-20 gap-8">
+      {/* Gemini-style pulsing orb */}
+      <div className="relative">
+        <div
+          className="w-20 h-20 rounded-full flex items-center justify-center shadow-2xl"
+          style={{
+            background: 'linear-gradient(135deg, #EC4899, #8B5CF6, #3B82F6)',
+            animation: 'spin 3s linear infinite'
+          }}
+        >
+          <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center">
+            <span
+              className="material-symbols-outlined text-2xl"
+              style={{
+                background: 'linear-gradient(135deg, #EC4899, #8B5CF6)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                animation: 'pulse 1.5s ease-in-out infinite'
+              }}
+            >
+              auto_awesome
+            </span>
+          </div>
+        </div>
+        {/* Glow ring */}
+        <div
+          className="absolute inset-0 rounded-full"
+          style={{
+            background: 'linear-gradient(135deg, #EC489940, #8B5CF640, #3B82F640)',
+            filter: 'blur(12px)',
+            transform: 'scale(1.3)',
+            zIndex: -1
+          }}
+        />
       </div>
+
       <div className="text-center">
-        <p className="font-bold text-gray-800 text-lg mb-1">AI is working on your request...</p>
-        <p className="text-gray-500 text-sm">{steps[currentStep] || "Processing with Gemini..."}</p>
+        <p className="font-black text-gray-900 text-xl mb-1">Google Gemini is generating...</p>
+        <p className="text-gray-500 text-sm">{steps[currentStep] || "Processing with Gemini AI..."}</p>
       </div>
-      <div className="w-full max-w-sm space-y-2">
+
+      {/* Steps */}
+      <div className="w-full max-w-md bg-white border border-gray-100 rounded-2xl p-5 shadow-sm space-y-3">
+        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Powered by Google Gemini API</p>
         {steps.map((step, i) => (
-          <div key={i} className="flex items-center gap-3 text-sm">
+          <div key={i} className="flex items-center gap-3">
             <div
-              className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${i < currentStep
-                ? "bg-green-500"
-                : i === currentStep
-                  ? "bg-[#EC4899] animate-pulse"
-                  : "bg-gray-200"
-                }`}
+              className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-500 ${
+                i < currentStep ? 'bg-green-500' : i === currentStep ? 'bg-gradient-to-br from-[#EC4899] to-[#8B5CF6]' : 'bg-gray-100'
+              }`}
             >
               {i < currentStep ? (
-                <span className="material-symbols-outlined text-white" style={{ fontSize: 12 }}>
-                  check
-                </span>
+                <span className="material-symbols-outlined text-white" style={{ fontSize: 13 }}>check</span>
               ) : i === currentStep ? (
-                <span className="w-2 h-2 bg-white rounded-full block" />
+                <span className="w-2 h-2 bg-white rounded-full block animate-pulse" />
               ) : null}
             </div>
-            <span className={i <= currentStep ? "text-gray-800 font-bold" : "text-gray-400"}>
-              {i === currentStep ? "✨ " : ""}{step}
+            <span
+              className={`text-sm transition-all duration-300 ${
+                i < currentStep ? 'text-green-600 font-semibold line-through opacity-60'
+                : i === currentStep ? 'text-gray-900 font-black'
+                : 'text-gray-400'
+              }`}
+            >
+              {i === currentStep ? '✨ ' : ''}{step}
             </span>
           </div>
         ))}
@@ -963,11 +1014,39 @@ export default function ResumeAIStudioPage() {
 
         {!loading && !error && !isToolInput && !result && resumeData && (
           <>
-            <div className="mb-6">
-              <h2 className="text-lg font-black text-gray-900 mb-1">What do you want to do?</h2>
-              <p className="text-sm text-gray-500">Choose an AI-powered tool to analyze or enhance your resume.</p>
+            {/* Google AI Header Banner */}
+            <div
+              className="rounded-2xl p-5 mb-6 flex items-center gap-5 flex-wrap"
+              style={{
+                background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
+                boxShadow: '0 8px 40px rgba(0,0,0,0.15)'
+              }}
+            >
+              <div
+                className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0"
+                style={{ background: 'linear-gradient(135deg, #EC4899, #8B5CF6, #3B82F6)' }}
+              >
+                <span className="material-symbols-outlined text-white text-2xl">auto_awesome</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                  <h2 className="text-lg font-black text-white">AI Studio Tools</h2>
+                  <span
+                    className="text-[10px] font-black px-2.5 py-0.5 rounded-full text-white"
+                    style={{ background: 'linear-gradient(135deg, #EC4899, #8B5CF6)' }}
+                  >
+                    Google Gemini Powered
+                  </span>
+                </div>
+                <p className="text-[12px] text-blue-200/70">All results are generated live via your Google Gemini API key — no static templates.</p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                <span className="text-[11px] text-green-300 font-semibold">API Connected</span>
+              </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-12">
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-12">
               {TOOLS.map((tool) => (
                 <ToolCard key={tool.id} {...tool} />
               ))}
@@ -1410,38 +1489,143 @@ function TailorResult({ data, tailored, original, onApply }) {
 
 function SkillsResult({ data }) {
   const cats = [
-    { key: "existing_skills", label: "Already Have", icon: "check_circle", color: "#10B981", bg: "bg-green-50", border: "border-green-100" },
-    { key: "missing_skills", label: "Missing Required", icon: "warning", color: "#EF4444", bg: "bg-red-50", border: "border-red-100" },
-    { key: "recommended_skills", label: "Recommended", icon: "star", color: "#F59E0B", bg: "bg-amber-50", border: "border-amber-100" },
+    {
+      key: "existing_skills",
+      label: "Already Have",
+      icon: "verified",
+      color: "#10B981",
+      gradient: "linear-gradient(135deg, #10B981, #34D399)",
+      bgLight: "#ECFDF5",
+      borderColor: "#A7F3D0",
+      count: (data.existing_skills || []).length,
+    },
+    {
+      key: "missing_skills",
+      label: "Missing Required",
+      icon: "error",
+      color: "#EF4444",
+      gradient: "linear-gradient(135deg, #EF4444, #F87171)",
+      bgLight: "#FEF2F2",
+      borderColor: "#FECACA",
+      count: (data.missing_skills || []).length,
+    },
+    {
+      key: "recommended_skills",
+      label: "Recommended to Learn",
+      icon: "lightbulb",
+      color: "#F59E0B",
+      gradient: "linear-gradient(135deg, #F59E0B, #FCD34D)",
+      bgLight: "#FFFBEB",
+      borderColor: "#FDE68A",
+      count: (data.recommended_skills || []).length,
+    },
   ];
+
+  const importanceOrder = { high: 0, medium: 1, low: 2 };
+
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-      {cats.map((cat) => (
-        <div key={cat.key} className={`${cat.bg} border ${cat.border} rounded-2xl p-5`}>
-          <div className="flex items-center gap-2 mb-4">
-            <span className="material-symbols-outlined text-sm" style={{ color: cat.color }}>
-              {cat.icon}
-            </span>
-            <h3 className="font-bold text-gray-800 text-sm flex-1">{cat.label}</h3>
-            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-white" style={{ color: cat.color }}>
-              {(data[cat.key] || []).length}
-            </span>
+    <div className="space-y-5">
+      {/* Summary bar */}
+      <div className="flex gap-3 flex-wrap">
+        {cats.map((cat) => (
+          <div
+            key={cat.key}
+            className="flex-1 min-w-[130px] rounded-2xl p-4 text-white"
+            style={{ background: cat.gradient, boxShadow: `0 4px 16px ${cat.color}30` }}
+          >
+            <div className="flex items-center gap-2 mb-1">
+              <span className="material-symbols-outlined text-white/90" style={{ fontSize: 18 }}>{cat.icon}</span>
+              <span className="text-3xl font-black">{cat.count}</span>
+            </div>
+            <p className="text-[11px] font-semibold text-white/80 leading-tight">{cat.label}</p>
           </div>
-          <div className="space-y-2">
-            {(data[cat.key] || []).map((s, i) => (
-              <div key={i} className="bg-white rounded-lg px-3 py-2 shadow-sm">
-                <div className="flex items-center justify-between mb-0.5">
-                  <span className="text-[12px] font-bold text-gray-800">{s.name}</span>
-                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: `${cat.color}20`, color: cat.color }}>
-                    {s.importance || "medium"}
-                  </span>
+        ))}
+      </div>
+
+      {/* Skill columns */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {cats.map((cat) => {
+          const skills = (data[cat.key] || []).slice().sort(
+            (a, b) => (importanceOrder[a.importance] ?? 1) - (importanceOrder[b.importance] ?? 1)
+          );
+          return (
+            <div
+              key={cat.key}
+              className="rounded-2xl p-4"
+              style={{ background: cat.bgLight, border: `1.5px solid ${cat.borderColor}` }}
+            >
+              <div className="flex items-center gap-2 mb-3">
+                <div
+                  className="w-7 h-7 rounded-lg flex items-center justify-center"
+                  style={{ background: cat.color + '20' }}
+                >
+                  <span className="material-symbols-outlined" style={{ color: cat.color, fontSize: 16 }}>{cat.icon}</span>
                 </div>
-                {s.reason && <p className="text-[10px] text-gray-500">{s.reason}</p>}
+                <span className="font-black text-gray-800 text-[13px]">{cat.label}</span>
+                <span
+                  className="ml-auto text-[10px] font-black px-2 py-0.5 rounded-full text-white"
+                  style={{ background: cat.color }}
+                >
+                  {cat.count}
+                </span>
               </div>
+
+              <div className="space-y-2">
+                {skills.length === 0 && (
+                  <p className="text-xs text-gray-400 italic text-center py-4">None identified</p>
+                )}
+                {skills.map((s, i) => {
+                  const importance = s.importance || 'medium';
+                  const pct = importance === 'high' ? 90 : importance === 'medium' ? 60 : 35;
+                  return (
+                    <div key={i} className="bg-white rounded-xl px-3 pt-2.5 pb-2 shadow-sm">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[12px] font-black text-gray-900">{s.name}</span>
+                        <span
+                          className="text-[9px] font-black px-1.5 py-0.5 rounded-full capitalize"
+                          style={{ background: cat.color + '18', color: cat.color }}
+                        >
+                          {importance}
+                        </span>
+                      </div>
+                      {/* Relevance bar */}
+                      <div className="h-1 bg-gray-100 rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all duration-700"
+                          style={{ width: `${pct}%`, background: cat.gradient }}
+                        />
+                      </div>
+                      {s.reason && (
+                        <p className="text-[10px] text-gray-400 mt-1.5 leading-snug line-clamp-2">{s.reason}</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {data.learning_path && data.learning_path.length > 0 && (
+        <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+          <h4 className="font-black text-gray-900 text-sm mb-3 flex items-center gap-2">
+            <span className="material-symbols-outlined text-purple-500" style={{ fontSize: 16 }}>route</span>
+            Google AI Learning Path Suggestions
+          </h4>
+          <div className="flex flex-wrap gap-2">
+            {data.learning_path.map((item, i) => (
+              <span
+                key={i}
+                className="text-[11px] font-semibold px-3 py-1 rounded-full"
+                style={{ background: '#8B5CF618', color: '#8B5CF6', border: '1px solid #8B5CF630' }}
+              >
+                {typeof item === 'string' ? item : item.skill || item.name || JSON.stringify(item)}
+              </span>
             ))}
           </div>
         </div>
-      ))}
+      )}
     </div>
   );
 }
@@ -1801,15 +1985,94 @@ function ResumeAIResultLayout({
         return <SkillsResult data={data} />;
 
       case "generate":
+        const genResume = data.resume_data || {};
+        const genPersonal = genResume.personal || {};
+        const genExp = genResume.experience || [];
+        const genSkills = (genResume.skills || []).slice(0, 12);
         return (
           <div className="space-y-4">
-            <div className="bg-white border border-gray-100 rounded-2xl p-5">
-              <h3 className="font-bold text-gray-800 text-sm mb-2">Targeted Resume Generated</h3>
-              <p className="text-xs text-gray-600 mb-1"><b>Target Role:</b> {data.target_role}</p>
-              <p className="text-xs text-gray-600">Generated personal details and structural matching templates for this profile.</p>
+            {/* Generated badge */}
+            <div
+              className="rounded-2xl p-5"
+              style={{
+                background: 'linear-gradient(135deg, #10B981, #059669)',
+                boxShadow: '0 8px 32px #10B98130'
+              }}
+            >
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-white text-xl">auto_awesome</span>
+                </div>
+                <div>
+                  <p className="font-black text-white text-base leading-none">Resume Generated!</p>
+                  <p className="text-emerald-200 text-[11px] mt-0.5">Powered by Google Gemini API</p>
+                </div>
+              </div>
+              {data.target_role && (
+                <div className="bg-white/15 rounded-xl px-3 py-2 mt-3">
+                  <p className="text-[10px] text-emerald-200 font-bold uppercase tracking-wider">Target Role</p>
+                  <p className="text-white font-black text-sm">{data.target_role}</p>
+                </div>
+              )}
             </div>
-            <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 text-xs text-amber-800">
-              <p>Press <b>✓ Apply Tailored Resume</b> to load this generated design structure into the builder dashboard.</p>
+
+            {/* Name & Title */}
+            {genPersonal.fullName && (
+              <div className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Generated Profile</p>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center shrink-0">
+                    <span className="text-white font-black text-sm">
+                      {genPersonal.fullName.charAt(0)}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="font-black text-gray-900 text-sm">{genPersonal.fullName}</p>
+                    <p className="text-[11px] text-gray-500">{genPersonal.title || data.target_role}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Experience preview */}
+            {genExp.length > 0 && (
+              <div className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2.5">Experience ({genExp.length} roles)</p>
+                <div className="space-y-2">
+                  {genExp.slice(0, 3).map((e, i) => (
+                    <div key={i} className="flex items-center gap-2.5">
+                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-gray-800 truncate">{e.position}</p>
+                        <p className="text-[10px] text-gray-500 truncate">{e.company} · {e.startDate}–{e.endDate || 'Present'}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Skills preview */}
+            {genSkills.length > 0 && (
+              <div className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Key Skills</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {genSkills.map((s, i) => (
+                    <span
+                      key={i}
+                      className="text-[10px] font-semibold px-2.5 py-1 rounded-full"
+                      style={{ background: '#10B98115', color: '#10B981', border: '1px solid #10B98130' }}
+                    >
+                      {typeof s === 'string' ? s : s.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3.5 text-xs text-emerald-800 flex items-start gap-2">
+              <span className="material-symbols-outlined text-emerald-500 text-sm mt-0.5">info</span>
+              <p>Full resume is in the preview. Click <b>Open in Resume Editor</b> to edit, customize, and export as PDF.</p>
             </div>
           </div>
         );
@@ -1819,112 +2082,130 @@ function ResumeAIResultLayout({
     }
   };
 
+  const isFullWidth = ["skills", "analyze"].includes(tool);
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start animate-fade-in">
-      {/* Left Column — Analysis & Details */}
-      <div className="lg:col-span-5 space-y-6">
-        {renderLeftContent()}
+    <div className={`animate-fade-in ${isFullWidth ? "" : "grid grid-cols-1 lg:grid-cols-12 gap-8 items-start"}`}>
+      {/* Left/Full Column — Analysis & Details */}
+      <div className={isFullWidth ? "w-full" : "lg:col-span-5 space-y-6"}>
+        {isFullWidth ? (
+          <div className="space-y-6">
+            {renderLeftContent()}
+          </div>
+        ) : (
+          <>{renderLeftContent()}</>
+        )}
 
         {/* Unified Bottom Action */}
-        {tailoredResume && (
-          <div className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm flex items-center justify-between gap-4">
+        {(tailoredResume || tool === "generate") && (
+          <div
+            className="rounded-xl p-4 shadow-sm flex items-center justify-between gap-4 mt-6"
+            style={{ background: tool === "generate" ? 'linear-gradient(135deg, #ECFDF5, #D1FAE5)' : 'white', border: tool === "generate" ? '1.5px solid #A7F3D0' : '1px solid #f3f4f6' }}
+          >
             <div>
-              <p className="text-[10px] text-gray-400 font-bold uppercase">Ready to Edit?</p>
-              <p className="text-xs text-gray-500">Apply this tailored layout and open in Resume Editor.</p>
+              <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: tool === "generate" ? '#065F46' : '#9CA3AF' }}>
+                {tool === "generate" ? "Google AI Generated" : "Ready to Edit?"}
+              </p>
+              <p className="text-xs font-medium" style={{ color: tool === "generate" ? '#047857' : '#6B7280' }}>
+                {tool === "generate" ? "Open in Resume Builder to edit and export." : "Apply tailored layout and open in editor."}
+              </p>
             </div>
             <button
               onClick={onApply}
-              className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl text-xs font-bold hover:opacity-90 transition-opacity shadow-md cursor-pointer animate-pulse"
+              className="flex items-center gap-1.5 px-5 py-2.5 text-white rounded-xl text-xs font-black hover:opacity-90 transition-opacity shadow-lg cursor-pointer"
+              style={{ background: tool === "generate" ? 'linear-gradient(135deg, #10B981, #059669)' : 'linear-gradient(135deg, #7C3AED, #4F46E5)' }}
             >
               <span className="material-symbols-outlined text-sm">edit_note</span>
-              Open in Resume Editor
+              Open in Resume Builder
             </button>
           </div>
         )}
       </div>
 
-      {/* Right Column — Actual Resume Preview */}
-      <div className="lg:col-span-7 space-y-4">
-        {/* Toggle and Zoom Toolbar */}
-        <div className="bg-white border border-gray-100 rounded-xl p-3 shadow-sm flex items-center justify-between flex-wrap gap-3">
-          {/* Toggle */}
-          <div className="flex gap-1 bg-gray-50 p-1 border border-gray-200/50 rounded-lg">
-            <button
-              onClick={() => setView("original")}
-              className={`px-3 py-1.5 rounded-md text-[10px] font-bold transition-all cursor-pointer ${view === "original"
-                ? "bg-white text-gray-800 shadow-sm border border-gray-200/30"
-                : "text-gray-500 hover:text-gray-800"
-                }`}
-            >
-              Original
-            </button>
-            {tailoredResume && (
+      {/* Right Column — Resume Preview (hidden for skills/analyze) */}
+      {!isFullWidth && (
+        <div className="lg:col-span-7 space-y-4">
+          {/* Toggle and Zoom Toolbar */}
+          <div className="bg-white border border-gray-100 rounded-xl p-3 shadow-sm flex items-center justify-between flex-wrap gap-3">
+            {/* Toggle */}
+            <div className="flex gap-1 bg-gray-50 p-1 border border-gray-200/50 rounded-lg">
               <button
-                onClick={() => setView("tailored")}
-                className={`px-3 py-1.5 rounded-md text-[10px] font-bold transition-all cursor-pointer ${view === "tailored"
-                  ? "bg-white text-[#EC4899] shadow-sm border border-[#EC4899]/15"
-                  : "text-gray-500 hover:text-[#EC4899]"
+                onClick={() => setView("original")}
+                className={`px-3 py-1.5 rounded-md text-[10px] font-bold transition-all cursor-pointer ${view === "original"
+                  ? "bg-white text-gray-800 shadow-sm border border-gray-200/30"
+                  : "text-gray-500 hover:text-gray-800"
                   }`}
               >
-                Tailored
+                Original
               </button>
-            )}
+              {tailoredResume && (
+                <button
+                  onClick={() => setView("tailored")}
+                  className={`px-3 py-1.5 rounded-md text-[10px] font-bold transition-all cursor-pointer ${view === "tailored"
+                    ? "bg-white text-[#EC4899] shadow-sm border border-[#EC4899]/15"
+                    : "text-gray-500 hover:text-[#EC4899]"
+                    }`}
+                >
+                  Tailored
+                </button>
+              )}
+            </div>
+
+            {/* Zoom */}
+            <div className="flex items-center gap-1 text-[11px] font-bold text-gray-600">
+              <button
+                onClick={zoomOut}
+                className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-gray-50 flex items-center justify-center cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-sm select-none">remove</span>
+              </button>
+              <span className="w-10 text-center select-none">{zoom}%</span>
+              <button
+                onClick={zoomIn}
+                className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-gray-50 flex items-center justify-center cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-sm select-none">add</span>
+              </button>
+            </div>
+
+            {/* Download & Open Full actions */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => exportResumePDF()}
+                className="flex items-center gap-1 border border-gray-200 text-gray-600 px-3 py-1.5 rounded-lg text-[10px] font-bold hover:bg-gray-50 transition-colors shadow-sm bg-white cursor-pointer"
+                title="Download PDF"
+              >
+                <span className="material-symbols-outlined text-sm">download</span>
+                Download PDF
+              </button>
+              <button
+                onClick={() => setShowFullPreview(true)}
+                className="flex items-center gap-1 border border-gray-200 text-gray-600 px-3 py-1.5 rounded-lg text-[10px] font-bold hover:bg-gray-50 transition-colors shadow-sm bg-white cursor-pointer"
+                title="Open Full Preview"
+              >
+                <span className="material-symbols-outlined text-sm">fullscreen</span>
+                Full Preview
+              </button>
+            </div>
           </div>
 
-          {/* Zoom */}
-          <div className="flex items-center gap-1 text-[11px] font-bold text-gray-600">
-            <button
-              onClick={zoomOut}
-              className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-gray-50 flex items-center justify-center cursor-pointer"
+          {/* Scrollable A4 Document Canvas Container */}
+          <div className="bg-slate-100 border border-gray-200/50 rounded-2xl p-6 min-h-[550px] overflow-hidden flex justify-center items-start relative shadow-inner">
+            <div
+              className="transition-transform duration-200"
+              style={{
+                width: '800px',
+                height: '1131px',
+                transform: `scale(${zoom / 100})`,
+                transformOrigin: 'top center',
+                marginBottom: `${Math.round(1131 * (zoom / 100 - 1))}px`
+              }}
             >
-              <span className="material-symbols-outlined text-sm select-none">remove</span>
-            </button>
-            <span className="w-10 text-center select-none">{zoom}%</span>
-            <button
-              onClick={zoomIn}
-              className="w-7 h-7 rounded border border-gray-200 bg-white hover:bg-gray-50 flex items-center justify-center cursor-pointer"
-            >
-              <span className="material-symbols-outlined text-sm select-none">add</span>
-            </button>
-          </div>
-
-          {/* Download & Open Full actions */}
-          <div className="flex gap-2">
-            <button
-              onClick={() => exportResumePDF()}
-              className="flex items-center gap-1 border border-gray-200 text-gray-600 px-3 py-1.5 rounded-lg text-[10px] font-bold hover:bg-gray-50 transition-colors shadow-sm bg-white cursor-pointer"
-              title="Download PDF"
-            >
-              <span className="material-symbols-outlined text-sm">download</span>
-              Download PDF
-            </button>
-            <button
-              onClick={() => setShowFullPreview(true)}
-              className="flex items-center gap-1 border border-gray-200 text-gray-600 px-3 py-1.5 rounded-lg text-[10px] font-bold hover:bg-gray-50 transition-colors shadow-sm bg-white cursor-pointer"
-              title="Open Full Preview"
-            >
-              <span className="material-symbols-outlined text-sm">fullscreen</span>
-              Full Preview
-            </button>
+              <ResumePreview resumeData={activeResumeData} templateId={activeTemplateId} scale={100} />
+            </div>
           </div>
         </div>
-
-        {/* Scrollable A4 Document Canvas Container */}
-        <div className="bg-slate-100 border border-gray-200/50 rounded-2xl p-6 min-h-[550px] overflow-hidden flex justify-center items-start relative shadow-inner">
-          <div
-            className="transition-transform duration-200"
-            style={{
-              width: '800px',
-              height: '1131px',
-              transform: `scale(${zoom / 100})`,
-              transformOrigin: 'top center',
-              marginBottom: `${Math.round(1131 * (zoom / 100 - 1))}px`
-            }}
-          >
-            <ResumePreview resumeData={activeResumeData} templateId={activeTemplateId} scale={100} />
-          </div>
-        </div>
-      </div>
+      )}
 
       {/* Large Full Preview Modal Overlay */}
       {showFullPreview && (

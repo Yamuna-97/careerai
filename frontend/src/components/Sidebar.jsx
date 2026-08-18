@@ -25,11 +25,11 @@ export default function Sidebar() {
         {/* Brand Logo */}
         <div className="px-stack-lg mb-stack-xl flex items-center gap-3">
           <Link to="/" className="flex items-center gap-3 group">
-            <div className="w-10 h-10 rounded-lg ai-gradient flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform">
-              <span className="material-symbols-outlined text-on-primary icon-filled">psychology</span>
+            <div className="w-10 h-10 rounded-xl overflow-hidden shadow-md group-hover:scale-105 transition-transform ring-1 ring-primary/20">
+              <img src="/favicon.png" alt="CareerAI" className="w-full h-full object-cover" />
             </div>
             <div>
-              <h1 className="font-headline-md text-headline-md font-bold text-primary">CareerAI</h1>
+              <h1 className="font-headline-md text-headline-md font-bold text-transparent bg-clip-text bg-gradient-to-r from-[#EC4899] to-[#8B5CF6]">CareerAI</h1>
               <p className="font-label-sm text-label-sm text-on-surface-variant">AI-Driven Career Platform</p>
             </div>
           </Link>

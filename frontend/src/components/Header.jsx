@@ -115,11 +115,11 @@ export default function Header({ onToggleMobileSidebar }) {
             )}
 
             <Link to="/" className="flex items-center gap-2.5 group">
-              <div className="w-9 h-9 rounded-lg bg-gradient-to-r from-[#EC4899] to-[#FF8A3D] text-white flex items-center justify-center shadow-md group-hover:scale-105 transition-all">
-                <Brain className="w-5 h-5 fill-current" />
+              <div className="w-9 h-9 rounded-xl overflow-hidden shadow-md group-hover:scale-105 transition-all ring-1 ring-white/10">
+                <img src="/favicon.png" alt="CareerAI Logo" className="w-full h-full object-cover" />
               </div>
               <div className="hidden sm:block text-left">
-                <h1 className="font-headline-sm text-sm font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-[#EC4899] to-[#FF8A3D] tracking-tight">CareerAI</h1>
+                <h1 className="font-headline-sm text-sm font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-[#EC4899] to-[#8B5CF6] tracking-tight">CareerAI</h1>
                 <p className="text-[10px] text-on-surface-variant font-semibold">Smart Platform</p>
               </div>
             </Link>
